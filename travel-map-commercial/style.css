@@ -1,0 +1,1096 @@
+/* ─── Reset & Base ───────────────────────────────────── */
+* {
+  box-sizing: border-box;
+  margin: 0;
+  padding: 0;
+}
+
+body {
+  font-family: 'Noto Sans KR', -apple-system, sans-serif;
+  background: #f0f0f0;
+  height: 100vh;
+  overflow: hidden;
+}
+
+/* ─── Layout ─────────────────────────────────────────── */
+#app {
+  display: flex;
+  height: 100vh;
+}
+
+/* ─── Sidebar ────────────────────────────────────────── */
+#sidebar {
+  width: 300px;
+  min-width: 300px;
+  background: #ffffff;
+  display: flex;
+  flex-direction: column;
+  gap: 0;
+  overflow-y: auto;
+  z-index: 1000;
+  box-shadow: 2px 0 16px rgba(0, 0, 0, 0.08);
+}
+
+#sidebar-header {
+  padding: 24px 20px 16px;
+  border-bottom: 1px solid #f0f0f0;
+}
+
+h1 {
+  font-size: 17px;
+  font-weight: 700;
+  color: #111;
+  letter-spacing: -0.02em;
+}
+
+.subtitle {
+  font-size: 12px;
+  color: #999;
+  margin-top: 4px;
+  line-height: 1.4;
+}
+
+/* ─── Search ─────────────────────────────────────────── */
+#search-section {
+  padding: 16px 20px;
+  border-bottom: 1px solid #f0f0f0;
+  position: relative;
+}
+
+#search-wrap {
+  position: relative;
+}
+
+#search-input {
+  width: 100%;
+  padding: 10px 14px;
+  border: 1.5px solid #e5e5e5;
+  border-radius: 8px;
+  font-size: 13px;
+  font-family: inherit;
+  color: #111;
+  background: #fafafa;
+  outline: none;
+  transition: border-color 0.15s, background 0.15s;
+}
+
+#search-input:focus {
+  border-color: #111;
+  background: #fff;
+}
+
+#search-input::placeholder {
+  color: #bbb;
+}
+
+#search-spinner {
+  position: absolute;
+  right: 12px;
+  top: 50%;
+  transform: translateY(-50%);
+  font-size: 13px;
+  animation: spin 1s linear infinite;
+}
+
+#search-spinner.hidden {
+  display: none;
+}
+
+@keyframes spin {
+  from { transform: translateY(-50%) rotate(0deg); }
+  to   { transform: translateY(-50%) rotate(360deg); }
+}
+
+#search-results {
+  position: absolute;
+  top: calc(100% - 16px);
+  left: 20px;
+  right: 20px;
+  background: #fff;
+  border: 1.5px solid #e5e5e5;
+  border-top: none;
+  border-radius: 0 0 8px 8px;
+  max-height: 220px;
+  overflow-y: auto;
+  z-index: 9999;
+  display: none;
+  box-shadow: 0 8px 24px rgba(0, 0, 0, 0.1);
+}
+
+#search-results.visible {
+  display: block;
+}
+
+.search-result-item {
+  padding: 10px 14px;
+  font-size: 12px;
+  color: #333;
+  cursor: pointer;
+  border-bottom: 1px solid #f5f5f5;
+  line-height: 1.4;
+  transition: background 0.1s;
+}
+
+.search-result-item:hover {
+  background: #f7f7f7;
+}
+
+.search-result-item:last-child {
+  border-bottom: none;
+}
+
+.search-result-item.no-result {
+  color: #bbb;
+  cursor: default;
+}
+
+.search-result-item.no-result:hover {
+  background: none;
+}
+
+/* ─── Course section ─────────────────────────────────── */
+#course-section {
+  flex: 1;
+  padding: 16px 20px;
+  overflow-y: auto;
+  min-height: 0;
+}
+
+#course-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  margin-bottom: 12px;
+}
+
+h2 {
+  font-size: 11px;
+  font-weight: 600;
+  color: #aaa;
+  text-transform: uppercase;
+  letter-spacing: 0.08em;
+}
+
+#edit-toggle {
+  background: none;
+  border: 1.5px solid #e0e0e0;
+  border-radius: 6px;
+  padding: 4px 6px;
+  color: #bbb;
+  cursor: pointer;
+  display: flex;
+  align-items: center;
+  transition: background 0.15s, color 0.15s, border-color 0.15s;
+}
+
+#edit-toggle:hover {
+  background: #f5f5f5;
+  color: #555;
+  border-color: #ccc;
+}
+
+#edit-toggle.active {
+  background: #1a1a1a;
+  color: #fff;
+  border-color: #1a1a1a;
+}
+
+.course-name-input {
+  flex: 1;
+  font-size: 13px;
+  font-weight: 500;
+  color: #222;
+  border: none;
+  border-bottom: 1.5px solid #ccc;
+  outline: none;
+  background: transparent;
+  padding: 1px 2px;
+  min-width: 0;
+}
+
+.course-name-input:focus {
+  border-bottom-color: #1a1a1a;
+}
+
+/* ─── Course items ───────────────────────────────────── */
+#course-list {
+  display: flex;
+  flex-direction: column;
+}
+
+.empty-state {
+  text-align: center;
+  padding: 32px 0;
+  color: #ccc;
+  font-size: 12px;
+  line-height: 1.8;
+}
+
+.empty-state .empty-icon {
+  font-size: 28px;
+  display: block;
+  margin-bottom: 8px;
+}
+
+/* Course item row */
+.course-item {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  padding: 8px 4px;
+  border-radius: 8px;
+  transition: background 0.1s;
+  cursor: default;
+}
+
+/* 드래그 핸들 */
+.drag-handle {
+  cursor: grab;
+  padding: 0 2px;
+  flex-shrink: 0;
+  opacity: 0;
+  transition: opacity 0.15s;
+  display: flex;
+  align-items: center;
+}
+
+.course-item:hover .drag-handle {
+  opacity: 1;
+}
+
+.drag-handle:active {
+  cursor: grabbing;
+}
+
+/* 드래그 중인 아이템 */
+.course-item.dragging {
+  opacity: 0.35;
+}
+
+/* 드롭 위치 하이라이트 */
+.course-item.drag-over {
+  background: #f0f5ff;
+  outline: 2px dashed #aac4f0;
+  outline-offset: -2px;
+}
+
+.course-number {
+  width: 26px;
+  height: 26px;
+  min-width: 26px;
+  background: #111;
+  color: #fff;
+  border-radius: 50%;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-size: 12px;
+  font-weight: 700;
+  flex-shrink: 0;
+}
+
+.course-name {
+  flex: 1;
+  font-size: 13px;
+  font-weight: 500;
+  color: #222;
+  line-height: 1.3;
+  word-break: break-all;
+}
+
+.course-delete {
+  background: none;
+  border: none;
+  color: #ddd;
+  cursor: pointer;
+  font-size: 16px;
+  padding: 2px 4px;
+  border-radius: 4px;
+  transition: color 0.15s, background 0.15s;
+  line-height: 1;
+  flex-shrink: 0;
+}
+
+.course-delete:hover {
+  color: #ef4444;
+  background: #fff0f0;
+}
+
+/* Transport connector between items */
+.transport-connector {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  padding: 2px 0 2px 6px;
+}
+
+.connector-line {
+  width: 2px;
+  height: 24px;
+  background: #e5e5e5;
+  border-radius: 2px;
+  flex-shrink: 0;
+  margin-left: 11px;
+}
+
+.transport-select {
+  -webkit-appearance: none;
+  appearance: none;
+  background: #f5f5f5 url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='10' height='6'%3E%3Cpath d='M0 0l5 6 5-6z' fill='%23aaa'/%3E%3C/svg%3E") no-repeat right 8px center;
+  border: 1.5px solid #e5e5e5;
+  border-radius: 20px;
+  padding: 4px 24px 4px 10px;
+  font-size: 12px;
+  font-family: inherit;
+  color: #555;
+  cursor: pointer;
+  outline: none;
+  transition: border-color 0.15s;
+}
+
+.transport-select:focus {
+  border-color: #111;
+}
+
+/* ─── Actions ────────────────────────────────────────── */
+#actions {
+  padding: 16px 20px 20px;
+  border-top: 1px solid #f0f0f0;
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+
+#export-btn {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 6px;
+  background: #111;
+  color: #fff;
+  border: none;
+  padding: 13px;
+  border-radius: 8px;
+  font-size: 14px;
+  font-family: inherit;
+  font-weight: 700;
+  cursor: pointer;
+  transition: background 0.15s, transform 0.1s;
+  letter-spacing: -0.01em;
+}
+
+#export-btn:hover {
+  background: #333;
+}
+
+#export-btn:active {
+  transform: scale(0.98);
+}
+
+#clear-btn {
+  background: none;
+  color: #bbb;
+  border: none;
+  padding: 8px;
+  border-radius: 6px;
+  font-size: 12px;
+  font-family: inherit;
+  cursor: pointer;
+  transition: color 0.15s, background 0.15s;
+  text-align: center;
+}
+
+#clear-btn:hover {
+  color: #ef4444;
+  background: #fff0f0;
+}
+
+/* ─── Map ────────────────────────────────────────────── */
+#map-container {
+  flex: 1;
+  position: relative;
+  overflow: hidden;
+}
+
+#map {
+  width: 100%;
+  height: 100%;
+  background: #C5DDE8; /* CartoDB Voyager 바다 fallback */
+}
+
+/* ─── Pill Markers ───────────────────────────────────── */
+/* pm-root: lat/lng 앵커 (size 0x0)
+   pm-pin:  오프셋 시 실제 위치 표시 점
+   pm-leader-line: 핀 → 유닛 연결선
+   pm-unit: photo + pill 컨테이너 (left/top으로 위치 지정)
+   pm-photo: 원형 사진
+   pm-pill: [번호|이름] 캡슐 */
+
+.pm-pin {
+  position: absolute;
+  width: 10px;
+  height: 10px;
+  border-radius: 50%;
+  background: #fff;
+  border: 2px solid #222;
+  box-shadow: 0 1px 4px rgba(0, 0, 0, 0.3);
+  transform: translate(-50%, -50%);
+  pointer-events: none;
+  z-index: 1;
+}
+
+.pm-leader-line {
+  position: absolute;
+  left: 0;
+  top: 0;
+  height: 0;
+  border-top: 1.5px dashed #B8B8B8;
+  transform-origin: 0 0;
+  pointer-events: none;
+}
+
+.pm-unit {
+  position: absolute;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 5px;
+  pointer-events: none;
+}
+
+.pm-unit > * {
+  pointer-events: auto;
+}
+
+.pm-photo {
+  width: 64px;
+  height: 64px;
+  border-radius: 50%;
+  background-size: cover;
+  background-position: center;
+  background-color: #e0e0e0;
+  border: 3px solid #fff;
+  box-shadow: 0 3px 14px rgba(0, 0, 0, 0.3);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  overflow: hidden;
+  flex-shrink: 0;
+  box-sizing: border-box;
+}
+
+.pm-pill {
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+  background: #fff;
+  border: 1.5px solid rgba(0, 0, 0, 0.14);
+  border-radius: 20px;
+  padding: 3px 10px 3px 4px;
+  box-shadow: 0 2px 10px rgba(0, 0, 0, 0.2);
+  white-space: nowrap;
+  max-width: 180px;
+}
+
+.pm-pill--nonum {
+  padding: 3px 10px;
+}
+
+.pm-num {
+  width: 20px;
+  height: 20px;
+  border-radius: 50%;
+  background: #1a1a1a;
+  color: #fff;
+  font-size: 10px;
+  font-weight: 800;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  flex-shrink: 0;
+  font-family: 'Noto Sans KR', sans-serif;
+  line-height: 1;
+}
+
+.pm-name {
+  color: #111;
+  font-size: 11px;
+  font-weight: 600;
+  font-family: 'Noto Sans KR', sans-serif;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  max-width: 130px;
+  line-height: 1.2;
+}
+
+/* Transport badge on route midpoint */
+.transport-badge {
+  background: #fff;
+  border: 2px solid #111;
+  border-radius: 50%;
+  width: 26px;
+  height: 26px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-size: 13px;
+  color: #333;
+  box-shadow: 0 2px 8px rgba(0, 0, 0, 0.15);
+}
+
+/* ─── Map overlay controls ───────────────────────────── */
+
+/* 상단 우측: 핀 추가 버튼 */
+#map-controls-top {
+  position: absolute;
+  top: 12px;
+  right: 12px;
+  z-index: 1000;
+}
+
+/* 핀 추가 버튼 - 독립 스타일 (둥근 사각형 + 오렌지 액센트) */
+#pin-toggle {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  background: #fff;
+  border: 2px solid #E85D26;
+  border-radius: 12px;
+  padding: 8px 16px 8px 12px;
+  font-size: 13px;
+  font-family: inherit;
+  font-weight: 700;
+  color: #E85D26;
+  cursor: pointer;
+  box-shadow: 0 2px 12px rgba(232, 93, 38, 0.18);
+  transition: background 0.15s, color 0.15s, box-shadow 0.15s;
+  user-select: none;
+  letter-spacing: -0.01em;
+}
+
+#pin-toggle:hover {
+  background: rgba(232, 93, 38, 0.07);
+  box-shadow: 0 3px 16px rgba(232, 93, 38, 0.28);
+}
+
+#pin-toggle.active {
+  background: #E85D26;
+  color: #fff;
+  box-shadow: 0 3px 16px rgba(232, 93, 38, 0.45);
+}
+
+#pin-toggle.active:hover {
+  background: #C94E1E;
+  border-color: #C94E1E;
+}
+
+/* 하단 중앙: 표시 옵션 + 배율 컨트롤 */
+#map-controls-bottom {
+  position: absolute;
+  bottom: 28px;
+  left: 50%;
+  transform: translateX(-50%);
+  z-index: 1000;
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  background: #fff;
+  border: 1.5px solid #ddd;
+  border-radius: 24px;
+  box-shadow: 0 2px 12px rgba(0, 0, 0, 0.12);
+  padding: 4px 6px;
+  white-space: nowrap;
+}
+
+#course-toggle,
+#badge-toggle,
+#photo-toggle {
+  display: flex;
+  align-items: center;
+  gap: 5px;
+  background: transparent;
+  border: none;
+  border-radius: 18px;
+  padding: 6px 11px;
+  font-size: 12px;
+  font-family: inherit;
+  font-weight: 600;
+  color: #888;
+  cursor: pointer;
+  transition: background 0.15s, color 0.15s;
+  user-select: none;
+}
+
+#course-toggle:hover,
+#badge-toggle:hover,
+#photo-toggle:hover {
+  color: #111;
+  background: rgba(0, 0, 0, 0.05);
+}
+
+#course-toggle.active,
+#badge-toggle.active,
+#photo-toggle.active {
+  background: #111;
+  color: #fff;
+}
+
+#course-toggle.active:hover,
+#badge-toggle.active:hover,
+#photo-toggle.active:hover {
+  background: #333;
+}
+
+
+/* 일부 모드만 켜진 경우 인디케이터 dot */
+#badge-filter-dot {
+  display: none;
+  width: 5px;
+  height: 5px;
+  background: #E85D26;
+  border-radius: 50%;
+  margin-left: 2px;
+  flex-shrink: 0;
+}
+
+#badge-toggle.active #badge-filter-dot {
+  background: rgba(255, 255, 255, 0.8);
+}
+
+/* ─── Badge filter popover ───────────────────────────── */
+#badge-filter-popover {
+  position: absolute;
+  bottom: 82px;
+  left: 50%;
+  transform: translateX(-50%);
+  z-index: 1001;
+  display: none;
+  align-items: center;
+  gap: 4px;
+  background: #1e1e1e;
+  border-radius: 16px;
+  padding: 5px 6px;
+  box-shadow: 0 6px 20px rgba(0, 0, 0, 0.28), 0 2px 6px rgba(0, 0, 0, 0.15);
+  white-space: nowrap;
+}
+
+#badge-filter-popover.visible {
+  display: flex;
+}
+
+.mode-chip {
+  display: flex;
+  align-items: center;
+  gap: 4px;
+  background: transparent;
+  border: none;
+  border-radius: 100px;
+  padding: 5px 10px;
+  font-size: 11px;
+  font-family: inherit;
+  font-weight: 500;
+  color: rgba(255, 255, 255, 0.3);
+  cursor: pointer;
+  transition: background 0.15s, color 0.15s;
+  user-select: none;
+}
+
+.mode-chip:hover {
+  background: rgba(255, 255, 255, 0.08);
+  color: rgba(255, 255, 255, 0.65);
+}
+
+.mode-chip.active {
+  background: rgba(255, 255, 255, 0.13);
+  color: #fff;
+}
+
+.mode-chip.active:hover {
+  background: rgba(255, 255, 255, 0.18);
+}
+
+.bottom-divider {
+  width: 1px;
+  height: 20px;
+  background: #e0e0e0;
+  margin: 0 10px;
+  flex-shrink: 0;
+}
+
+/* ─── Pin mode ───────────────────────────────────────── */
+#map.pin-mode,
+#map.pin-mode .leaflet-interactive {
+  cursor: crosshair !important;
+}
+
+#pin-mode-hint {
+  position: absolute;
+  top: 12px;
+  left: 50%;
+  transform: translateX(-50%);
+  background: rgba(232, 93, 38, 0.92);
+  color: #fff;
+  font-size: 12px;
+  font-weight: 600;
+  padding: 8px 18px;
+  border-radius: 20px;
+  box-shadow: 0 2px 12px rgba(0,0,0,0.18);
+  z-index: 1000;
+  pointer-events: none;
+  white-space: nowrap;
+  display: none;
+}
+
+#pin-mode-hint.visible {
+  display: block;
+}
+
+/* ─── Pin popup ──────────────────────────────────────── */
+.pin-popup .leaflet-popup-content-wrapper {
+  border-radius: 12px;
+  box-shadow: 0 4px 20px rgba(0, 0, 0, 0.18);
+  padding: 0;
+  overflow: hidden;
+}
+
+.pin-popup .leaflet-popup-content {
+  margin: 0;
+  width: auto !important;
+}
+
+.pin-popup .leaflet-popup-tip-container {
+  display: none;
+}
+
+.pin-popup-form {
+  padding: 14px 16px;
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+  min-width: 210px;
+}
+
+.pin-popup-label {
+  font-size: 11px;
+  font-weight: 600;
+  color: #888;
+  letter-spacing: 0.02em;
+}
+
+.pin-popup-input {
+  width: 100%;
+  border: 1.5px solid #ddd;
+  border-radius: 8px;
+  padding: 8px 10px;
+  font-size: 13px;
+  font-family: inherit;
+  outline: none;
+  color: #111;
+  transition: border-color 0.15s;
+}
+
+.pin-popup-input:focus {
+  border-color: #E85D26;
+}
+
+.pin-popup-actions {
+  display: flex;
+  gap: 6px;
+  justify-content: flex-end;
+}
+
+.pin-cancel-btn {
+  padding: 6px 12px;
+  border: 1.5px solid #ddd;
+  border-radius: 8px;
+  background: #fff;
+  font-size: 12px;
+  font-family: inherit;
+  color: #666;
+  cursor: pointer;
+  transition: border-color 0.15s;
+}
+
+.pin-cancel-btn:hover {
+  border-color: #aaa;
+  color: #111;
+}
+
+.pin-confirm-btn {
+  padding: 6px 14px;
+  border: none;
+  border-radius: 8px;
+  background: #1a1a1a;
+  color: #fff;
+  font-size: 12px;
+  font-family: inherit;
+  font-weight: 600;
+  cursor: pointer;
+  transition: background 0.15s;
+}
+
+.pin-confirm-btn:hover {
+  background: #E85D26;
+}
+
+/* ─── Scale control ──────────────────────────────────── */
+#scale-control {
+  display: flex;
+  align-items: center;
+  gap: 3px;
+  padding: 0 4px 0 2px;
+}
+
+.scale-btn {
+  font-size: 11px;
+  font-weight: 700;
+  font-family: inherit;
+  padding: 3px 7px;
+  border-radius: 12px;
+  border: none;
+  background: transparent;
+  color: #888;
+  cursor: pointer;
+  line-height: 1;
+  transition: background 0.12s, color 0.12s;
+  white-space: nowrap;
+}
+
+.scale-btn:hover {
+  background: rgba(0, 0, 0, 0.06);
+  color: #222;
+}
+
+.scale-btn.active {
+  background: #1a1a1a;
+  color: #fff;
+}
+
+
+/* ─── Sidebar photo thumbnail ────────────────────────── */
+.course-photo-btn {
+  flex-shrink: 0;
+  cursor: pointer;
+}
+
+.course-thumb {
+  width: 32px;
+  height: 32px;
+  min-width: 32px;
+  border-radius: 50%;
+  background: #f0f0f0;
+  background-size: cover;
+  background-position: center;
+  position: relative;
+  border: 2px solid #e0e0e0;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  transition: filter 0.15s, border-color 0.15s;
+  box-shadow: 0 1px 4px rgba(0, 0, 0, 0.12);
+}
+
+.course-photo-btn:hover .course-thumb {
+  filter: brightness(0.85);
+  border-color: #bbb;
+}
+
+.course-thumb-num {
+  position: absolute;
+  bottom: -2px;
+  right: -2px;
+  width: 14px;
+  height: 14px;
+  background: #111;
+  color: #fff;
+  border-radius: 50%;
+  font-size: 8px;
+  font-weight: 700;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  border: 1.5px solid #fff;
+  font-family: 'Noto Sans KR', sans-serif;
+  line-height: 1;
+}
+
+/* ─── Export overlay ─────────────────────────────────── */
+#export-overlay {
+  position: fixed;
+  inset: 0;
+  background: rgba(0, 0, 0, 0.45);
+  display: none;
+  align-items: center;
+  justify-content: center;
+  z-index: 99999;
+  backdrop-filter: blur(2px);
+}
+
+#export-overlay.visible {
+  display: flex;
+}
+
+.export-msg {
+  background: #fff;
+  padding: 24px 36px;
+  border-radius: 14px;
+  font-size: 15px;
+  font-weight: 600;
+  color: #111;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 10px;
+  box-shadow: 0 12px 40px rgba(0, 0, 0, 0.2);
+}
+
+.spinner-wrap {
+  font-size: 26px;
+  animation: spin 1s linear infinite;
+  display: inline-block;
+}
+
+/* ─── Scrollbar ──────────────────────────────────────── */
+#sidebar::-webkit-scrollbar,
+#course-section::-webkit-scrollbar {
+  width: 4px;
+}
+
+#sidebar::-webkit-scrollbar-track,
+#course-section::-webkit-scrollbar-track {
+  background: transparent;
+}
+
+#sidebar::-webkit-scrollbar-thumb,
+#course-section::-webkit-scrollbar-thumb {
+  background: #e0e0e0;
+  border-radius: 4px;
+}
+
+/* ─── Photo Picker Modal ──────────────────────────────── */
+#photo-picker-overlay {
+  position: fixed;
+  inset: 0;
+  background: rgba(0, 0, 0, 0.5);
+  display: none;
+  align-items: center;
+  justify-content: center;
+  z-index: 99998;
+  backdrop-filter: blur(2px);
+}
+
+#photo-picker-overlay.visible {
+  display: flex;
+}
+
+#photo-picker-modal {
+  background: #fff;
+  border-radius: 16px;
+  width: 420px;
+  max-width: 90vw;
+  box-shadow: 0 16px 48px rgba(0, 0, 0, 0.22);
+  overflow: hidden;
+}
+
+#photo-picker-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 18px 20px 14px;
+  border-bottom: 1px solid #f0f0f0;
+}
+
+#photo-picker-title {
+  font-size: 15px;
+  font-weight: 700;
+  color: #111;
+}
+
+#photo-picker-close {
+  background: none;
+  border: none;
+  font-size: 16px;
+  color: #888;
+  cursor: pointer;
+  padding: 2px 4px;
+  line-height: 1;
+}
+
+#photo-picker-close:hover {
+  color: #333;
+}
+
+#photo-picker-grid {
+  display: grid;
+  grid-template-columns: repeat(3, 1fr);
+  gap: 8px;
+  padding: 16px;
+  min-height: 200px;
+  align-content: start;
+}
+
+.picker-photo {
+  aspect-ratio: 1;
+  border-radius: 10px;
+  background-size: cover;
+  background-position: center;
+  background-color: #f0f0f0;
+  cursor: pointer;
+  transition: transform 0.15s, box-shadow 0.15s, outline 0.1s;
+  outline: 3px solid transparent;
+}
+
+.picker-photo:hover {
+  transform: scale(1.03);
+  box-shadow: 0 4px 16px rgba(0, 0, 0, 0.18);
+}
+
+.picker-photo.selected {
+  outline: 3px solid #1a1a1a;
+  transform: scale(1.03);
+}
+
+.picker-loading {
+  grid-column: 1 / -1;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  height: 160px;
+  color: #aaa;
+  font-size: 14px;
+  gap: 8px;
+}
+
+.picker-empty {
+  grid-column: 1 / -1;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  height: 160px;
+  color: #aaa;
+  font-size: 13px;
+}
+
+#photo-picker-footer {
+  padding: 12px 16px 16px;
+  border-top: 1px solid #f0f0f0;
+  display: flex;
+  justify-content: flex-end;
+}
+
+#photo-picker-upload {
+  background: #f5f5f5;
+  border: 1.5px solid #e0e0e0;
+  border-radius: 8px;
+  padding: 8px 16px;
+  font-size: 13px;
+  font-weight: 600;
+  color: #444;
+  cursor: pointer;
+  transition: background 0.15s;
+}
+
+#photo-picker-upload:hover {
+  background: #ececec;
+}
