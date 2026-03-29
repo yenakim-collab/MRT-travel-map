@@ -651,7 +651,7 @@ function renderMarkers() {
 
   // 패스 2: 유닛 (그룹핑된 번호 표시)
   groups.forEach((g, gi) => {
-    const numLabel = g.indices.map(idx => idx + 1).join('/');
+    const numLabel = g.indices.map(idx => idx + 1).join(' · ');
     L.marker([g.lat, g.lng], {
       icon: makeMarkerIcon(g.wp, g.indices[0], offsets[gi], numLabel),
       zIndexOffset: 500 + g.indices[0] * 10,
@@ -1589,7 +1589,7 @@ document.getElementById('export-btn').addEventListener('click', async () => {
       const wp = g.wp;
       const pt = expPts[gi];
       const { dx: ox, dy: oy } = expOffsets[gi];
-      const numLabel = g.indices.map(idx => idx + 1).join('/');
+      const numLabel = g.indices.map(idx => idx + 1).join(' · ');
 
       // ── 공통 pill 드로잉 헬퍼 (markerScale 적용) ──────────────
       const drawPill = (pillCX, pillCY, numStr, nameStr) => {
