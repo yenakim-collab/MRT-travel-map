@@ -588,11 +588,11 @@ function updateArrows() {
       });
     }
   }
-  // isLoop 닫힘 화살표 (side=-1, 돌아오는길)
+  // isLoop 닫힘 화살표 (돌아오는길 — a/b 스왑으로 자연 반대쪽)
   if (isLoop && waypoints.length >= 2) {
     const a = waypoints[waypoints.length - 1], b = waypoints[0];
     [0.25, 0.75].forEach((t) => {
-      const pt = getArcPointAt(a.lat, a.lng, b.lat, b.lng, t, -1);
+      const pt = getArcPointAt(a.lat, a.lng, b.lat, b.lng, t, 1);
       L.marker([pt.lat, pt.lng], {
         icon: makeArrowIcon(pt.bearing),
         interactive: false, zIndexOffset: -200,
@@ -723,9 +723,8 @@ function render() {
     if (useCurve) {
       // 곡선 (side=1: 가는길)
       const arcPoints = getArcLatLngs(a.lat, a.lng, b.lat, b.lng, 1);
-      console.log('[DEBUG] curve segment', i, 'isLoop:', isLoop, 'points:', arcPoints.length, 'first:', arcPoints[0], 'mid:', arcPoints[15], 'last:', arcPoints[30]);
       L.polyline(arcPoints, {
-        renderer: canvasRenderer, color: 'red', weight: 3, opacity: 1,
+        renderer: canvasRenderer, color: '#222', weight: 2.5, opacity: 0.8,
         dashArray: showBadge ? (mode.dashArray || undefined) : undefined,
       }).addTo(polylineLayer);
       const arcMid = getArcPointAt(a.lat, a.lng, b.lat, b.lng, 0.5, 1);
@@ -742,16 +741,16 @@ function render() {
     }
   }
 
-  // isLoop: 마지막 → 첫 번째 닫힘 세그먼트 (side=-1, 돌아오는길)
+  // isLoop: 마지막 → 첫 번째 닫힘 세그먼트 (돌아오는길)
   if (isLoop && waypoints.length >= 2) {
     const a = waypoints[waypoints.length - 1], b = waypoints[0];
     const mode = TRANSPORT[loopTransportMode] || TRANSPORT.bus;
-    const arcPoints = getArcLatLngs(a.lat, a.lng, b.lat, b.lng, -1);
+    const arcPoints = getArcLatLngs(a.lat, a.lng, b.lat, b.lng, 1);
     L.polyline(arcPoints, {
       renderer: canvasRenderer, color: '#222', weight: 2.5, opacity: 0.8,
       dashArray: showBadge ? (mode.dashArray || undefined) : undefined,
     }).addTo(polylineLayer);
-    const arcMid = getArcPointAt(a.lat, a.lng, b.lat, b.lng, 0.5, -1);
+    const arcMid = getArcPointAt(a.lat, a.lng, b.lat, b.lng, 0.5, 1);
     badgeSegments.push({ aLat: a.lat, aLng: a.lng, bLat: b.lat, bLng: b.lng, midLat: arcMid.lat, midLng: arcMid.lng, mode, modeKey: loopTransportMode });
   }
 
@@ -1429,11 +1428,11 @@ document.getElementById('export-btn').addEventListener('click', async () => {
         }
       }
 
-      // 3b. isLoop 닫힘 화살표 (side=-1, 돌아오는길)
+      // 3b. isLoop 닫힘 화살표 (돌아오는길)
       if (isLoop && waypoints.length >= 2) {
         const a = waypoints[waypoints.length - 1], b = waypoints[0];
         [0.25, 0.75].forEach((t) => {
-          const arcPt = getArcPointAt(a.lat, a.lng, b.lat, b.lng, t, -1);
+          const arcPt = getArcPointAt(a.lat, a.lng, b.lat, b.lng, t, 1);
           const pt = map.latLngToContainerPoint([arcPt.lat, arcPt.lng]);
           drawArrowAt(pt.x, pt.y, (arcPt.bearing * Math.PI) / 180);
         });
@@ -1522,10 +1521,10 @@ document.getElementById('export-btn').addEventListener('click', async () => {
         }
       }
 
-      // 4b. isLoop 닫힘 배지 (side=-1, 돌아오는길 곡선 중점)
+      // 4b. isLoop 닫힘 배지 (돌아오는길 곡선 중점)
       if (isLoop && waypoints.length >= 2) {
         const a = waypoints[waypoints.length - 1], b = waypoints[0];
-        const arcMid = getArcPointAt(a.lat, a.lng, b.lat, b.lng, 0.5, -1);
+        const arcMid = getArcPointAt(a.lat, a.lng, b.lat, b.lng, 0.5, 1);
         const pt = map.latLngToContainerPoint([arcMid.lat, arcMid.lng]);
         drawBadge(pt, loopTransportMode || 'bus');
       }
