@@ -512,52 +512,44 @@ function makeMarkerIcon(wp, i, offset = { dx: 0, dy: 0 }) {
   });
 }
 
-// ─── 루프 닫힘 곡선: A→B 직선과 겹치지 않도록 호(arc)로 그리기 ──
-// 두 점 사이 수직 방향으로 볼록한 quadratic bezier 곡선 좌표 배열 반환
-function getArcLatLngs(aLat, aLng, bLat, bLng, segments = 30) {
-  const zoom = map.getZoom();
-  const pA = map.project([aLat, aLng], zoom);
-  const pB = map.project([bLat, bLng], zoom);
-  // 두 점 사이 거리의 25%만큼 수직 오프셋
-  const dx = pB.x - pA.x, dy = pB.y - pA.y;
+// ─── 곡선 유틸: lat/lng 기반 quadratic bezier arc ────────────
+// 줌 레벨에 의존하지 않고 lat/lng 좌표 공간에서 직접 곡선 계산
+// side: 1 = 왼쪽 볼록, -1 = 오른쪽 볼록
+function getArcLatLngs(aLat, aLng, bLat, bLng, side = 1, segments = 30) {
+  const dx = bLng - aLng, dy = bLat - aLat;
   const dist = Math.hypot(dx, dy);
-  const offsetPx = Math.max(dist * 0.25, 20); // 최소 20px
-  // 수직 방향 (왼쪽으로 볼록)
-  const nx = -dy / dist, ny = dx / dist;
-  // 제어점 (중점 + 수직 오프셋)
-  const cx = (pA.x + pB.x) / 2 + nx * offsetPx;
-  const cy = (pA.y + pB.y) / 2 + ny * offsetPx;
+  if (dist < 0.0001) return [[aLat, aLng], [bLat, bLng]];
+  const offset = dist * 0.25; // 두 점 거리의 25% 오프셋
+  const nx = (-dy / dist) * side, ny = (dx / dist) * side;
+  const cLng = (aLng + bLng) / 2 + ny * offset;
+  const cLat = (aLat + bLat) / 2 + nx * offset;
   const points = [];
   for (let i = 0; i <= segments; i++) {
     const t = i / segments;
-    const x = (1 - t) * (1 - t) * pA.x + 2 * (1 - t) * t * cx + t * t * pB.x;
-    const y = (1 - t) * (1 - t) * pA.y + 2 * (1 - t) * t * cy + t * t * pB.y;
-    const ll = map.unproject(L.point(x, y), zoom);
-    points.push([ll.lat, ll.lng]);
+    const lat = (1 - t) * (1 - t) * aLat + 2 * (1 - t) * t * cLat + t * t * bLat;
+    const lng = (1 - t) * (1 - t) * aLng + 2 * (1 - t) * t * cLng + t * t * bLng;
+    points.push([lat, lng]);
   }
   return points;
 }
 
-// 곡선 위 t 지점의 pixel 좌표 + 접선 방향(bearing) 반환
-function getArcPointAt(aLat, aLng, bLat, bLng, t) {
-  const zoom = map.getZoom();
-  const pA = map.project([aLat, aLng], zoom);
-  const pB = map.project([bLat, bLng], zoom);
-  const dx = pB.x - pA.x, dy = pB.y - pA.y;
+// 곡선 위 t 지점의 lat/lng + 접선 방향(bearing) 반환
+function getArcPointAt(aLat, aLng, bLat, bLng, t, side = 1) {
+  const dx = bLng - aLng, dy = bLat - aLat;
   const dist = Math.hypot(dx, dy);
-  const offsetPx = Math.max(dist * 0.25, 20);
-  const nx = -dy / dist, ny = dx / dist;
-  const cx = (pA.x + pB.x) / 2 + nx * offsetPx;
-  const cy = (pA.y + pB.y) / 2 + ny * offsetPx;
+  if (dist < 0.0001) return { lat: (aLat + bLat) / 2, lng: (aLng + bLng) / 2, bearing: 0 };
+  const offset = dist * 0.25;
+  const nx = (-dy / dist) * side, ny = (dx / dist) * side;
+  const cLng = (aLng + bLng) / 2 + ny * offset;
+  const cLat = (aLat + bLat) / 2 + nx * offset;
   // 곡선 위 점
-  const x = (1 - t) * (1 - t) * pA.x + 2 * (1 - t) * t * cx + t * t * pB.x;
-  const y = (1 - t) * (1 - t) * pA.y + 2 * (1 - t) * t * cy + t * t * pB.y;
-  // 접선 (미분)
-  const tx = 2 * (1 - t) * (cx - pA.x) + 2 * t * (pB.x - cx);
-  const ty = 2 * (1 - t) * (cy - pA.y) + 2 * t * (pB.y - cy);
-  const bearing = (Math.atan2(tx, -ty) * 180 / Math.PI + 360) % 360;
-  const ll = map.unproject(L.point(x, y), zoom);
-  return { lat: ll.lat, lng: ll.lng, bearing };
+  const lat = (1 - t) * (1 - t) * aLat + 2 * (1 - t) * t * cLat + t * t * bLat;
+  const lng = (1 - t) * (1 - t) * aLng + 2 * (1 - t) * t * cLng + t * t * bLng;
+  // 접선 (미분) → bearing 계산
+  const tLat = 2 * (1 - t) * (cLat - aLat) + 2 * t * (bLat - cLat);
+  const tLng = 2 * (1 - t) * (cLng - aLng) + 2 * t * (bLng - cLng);
+  const bearing = (Math.atan2(tLng, tLat) * 180 / Math.PI + 360) % 360;
+  return { lat, lng, bearing };
 }
 
 // ─── 방향 화살표: pixel space 보간으로 zoom-independent 배치 ──
