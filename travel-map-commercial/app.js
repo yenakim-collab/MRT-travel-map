@@ -480,7 +480,7 @@ function computeOffsets(pts, badgePts = []) {
 }
 
 // ─── 마커 DivIcon 생성 ───────────────────────────────────────
-function makeMarkerIcon(wp, i, offset = { dx: 0, dy: 0 }) {
+function makeMarkerIcon(wp, i, offset = { dx: 0, dy: 0 }, numLabel = null) {
   const { dx, dy } = offset;
   const hasOffset = dx !== 0 || dy !== 0;
   const hasImg = !!wp.imgUrl;
@@ -488,7 +488,8 @@ function makeMarkerIcon(wp, i, offset = { dx: 0, dy: 0 }) {
   const placeholder = !hasImg
     ? `<svg width="24" height="24" viewBox="0 0 24 24" fill="#ccc"><path d="M21 19V5c0-1.1-.9-2-2-2H5c-1.1 0-2 .9-2 2v14c0 1.1.9 2 2 2h14c1.1 0 2-.9 2-2zM8.5 13.5l2.5 3.01L14.5 12l4.5 6H5l3.5-4.5z"/></svg>`
     : '';
-  const numHtml = showCourse ? `<span class="pm-num">${i + 1}</span>` : '';
+  const displayNum = numLabel != null ? numLabel : String(i + 1);
+  const numHtml = showCourse ? `<span class="pm-num">${displayNum}</span>` : '';
   const pill = `<div class="pm-pill${showCourse ? '' : ' pm-pill--nonum'}">${numHtml}<span class="pm-name">${wp.name}</span></div>`;
 
   let inner = '';
@@ -605,18 +606,37 @@ let _markerRenderTimer = null;
 function renderMarkers() {
   markerLayer.clearLayers();
   if (waypoints.length === 0) return;
-  const pts = waypoints.map(wp => map.latLngToContainerPoint([wp.lat, wp.lng]));
-  // 배지가 켜진 경우에만 배지 위치를 장애물로 전달
+
+  // 동일 위치 waypoint를 그룹핑 (이름 + 근접 좌표 기준)
+  const groups = []; // [{ wp, indices: [0,2,...], lat, lng }]
+  const assigned = new Array(waypoints.length).fill(false);
+  for (let i = 0; i < waypoints.length; i++) {
+    if (assigned[i]) continue;
+    const g = { wp: waypoints[i], indices: [i], lat: waypoints[i].lat, lng: waypoints[i].lng };
+    for (let j = i + 1; j < waypoints.length; j++) {
+      if (assigned[j]) continue;
+      if (waypoints[j].name === waypoints[i].name && Math.hypot(waypoints[j].lat - waypoints[i].lat, waypoints[j].lng - waypoints[i].lng) < 0.01) {
+        g.indices.push(j);
+        assigned[j] = true;
+        // 이미지가 있는 wp 우선
+        if (!g.wp.imgUrl && waypoints[j].imgUrl) g.wp = waypoints[j];
+      }
+    }
+    assigned[i] = true;
+    groups.push(g);
+  }
+
+  const pts = groups.map(g => map.latLngToContainerPoint([g.lat, g.lng]));
   const badgePts = (showBadge && showCourse)
     ? badgeSegments.map(s => map.latLngToContainerPoint([s.midLat, s.midLng]))
     : [];
   const offsets = computeOffsets(pts, badgePts);
 
-  // 패스 1: 핀 도트 (zIndexOffset 매우 낮음 → 모든 유닛 아래)
-  waypoints.forEach((wp, i) => {
-    const { dx, dy } = offsets[i];
+  // 패스 1: 핀 도트
+  groups.forEach((g, gi) => {
+    const { dx, dy } = offsets[gi];
     if (dx !== 0 || dy !== 0) {
-      L.marker([wp.lat, wp.lng], {
+      L.marker([g.lat, g.lng], {
         icon: L.divIcon({
           html: '<div class="pm-pin"></div>',
           className: '',
@@ -629,11 +649,12 @@ function renderMarkers() {
     }
   });
 
-  // 패스 2: 유닛 (리더 라인 + 사진 + pill, zIndexOffset 높음 → 항상 핀 위)
-  waypoints.forEach((wp, i) => {
-    L.marker([wp.lat, wp.lng], {
-      icon: makeMarkerIcon(wp, i, offsets[i]),
-      zIndexOffset: 500 + i * 10,
+  // 패스 2: 유닛 (그룹핑된 번호 표시)
+  groups.forEach((g, gi) => {
+    const numLabel = g.indices.map(idx => idx + 1).join('/');
+    L.marker([g.lat, g.lng], {
+      icon: makeMarkerIcon(g.wp, g.indices[0], offsets[gi], numLabel),
+      zIndexOffset: 500 + g.indices[0] * 10,
     }).addTo(markerLayer);
   });
 }
@@ -1456,18 +1477,34 @@ document.getElementById('export-btn').addEventListener('click', async () => {
       }
     } // end showCourse arrows
 
-    // 겹침 방지 오프셋 (화면과 동일하게 computeOffsets 적용)
-    const expPts = waypoints.map(wp => map.latLngToContainerPoint([wp.lat, wp.lng]));
-    // 배지 좌표를 장애물로 전달 (화면 렌더링과 동일하게)
+    // 동일 위치 waypoint 그룹핑 (화면 렌더링과 동일)
+    const expGroups = [];
+    const expAssigned = new Array(waypoints.length).fill(false);
+    for (let i = 0; i < waypoints.length; i++) {
+      if (expAssigned[i]) continue;
+      const g = { wp: waypoints[i], indices: [i], lat: waypoints[i].lat, lng: waypoints[i].lng };
+      for (let j = i + 1; j < waypoints.length; j++) {
+        if (expAssigned[j]) continue;
+        if (waypoints[j].name === waypoints[i].name && Math.hypot(waypoints[j].lat - waypoints[i].lat, waypoints[j].lng - waypoints[i].lng) < 0.01) {
+          g.indices.push(j);
+          expAssigned[j] = true;
+          if (!g.wp.imgUrl && waypoints[j].imgUrl) g.wp = waypoints[j];
+        }
+      }
+      expAssigned[i] = true;
+      expGroups.push(g);
+    }
+
+    const expPts = expGroups.map(g => map.latLngToContainerPoint([g.lat, g.lng]));
     const expBadgePts = (showBadge && showCourse)
       ? badgeSegments.map(s => map.latLngToContainerPoint([s.midLat, s.midLng]))
       : [];
     const expOffsets = computeOffsets(expPts, expBadgePts);
 
     // pass 1: 리더라인 + 핀 도트 (배지보다 아래에 먼저 그림)
-    waypoints.forEach((_wp, i) => {
-      const pt = expPts[i];
-      const { dx: ox, dy: oy } = expOffsets[i];
+    expGroups.forEach((_g, gi) => {
+      const pt = expPts[gi];
+      const { dx: ox, dy: oy } = expOffsets[gi];
       if (ox === 0 && oy === 0) return;
 
       // 점선 리더라인
@@ -1547,18 +1584,25 @@ document.getElementById('export-btn').addEventListener('click', async () => {
       }
     } // end showBadge
 
-    // 4. 번호 마커(or 사진 마커) + 지역명 라벨
-    waypoints.forEach((wp, i) => {
-      const pt = expPts[i];
-      const { dx: ox, dy: oy } = expOffsets[i];
+    // 4. 번호 마커(or 사진 마커) + 지역명 라벨 (그룹핑 적용)
+    expGroups.forEach((g, gi) => {
+      const wp = g.wp;
+      const pt = expPts[gi];
+      const { dx: ox, dy: oy } = expOffsets[gi];
+      const numLabel = g.indices.map(idx => idx + 1).join('/');
 
       // ── 공통 pill 드로잉 헬퍼 (markerScale 적용) ──────────────
       const drawPill = (pillCX, pillCY, numStr, nameStr) => {
         const PILL_H = 26 * markerScale;
         const NUM_R  = 10 * markerScale;
+        // 번호 텍스트 폭 측정 → 원 or pill 형태 결정
+        ctx.font = `800 ${Math.round(10 * markerScale)}px 'Noto Sans KR', sans-serif`;
+        const numTextW = ctx.measureText(numStr).width;
+        const numBadgeW = Math.max(NUM_R * 2, numTextW + 8 * markerScale); // 최소 원형, 필요시 확장
+        const numBadgeH = NUM_R * 2;
         ctx.font = `600 ${Math.round(13 * markerScale)}px 'Noto Sans KR', sans-serif`;
         const nameW = ctx.measureText(nameStr).width;
-        const pillW = showCourse ? (4 * markerScale + NUM_R * 2 + 5 * markerScale + nameW + 10 * markerScale)
+        const pillW = showCourse ? (4 * markerScale + numBadgeW + 5 * markerScale + nameW + 10 * markerScale)
                                  : (10 * markerScale + nameW + 10 * markerScale);
         const px = pillCX - pillW / 2;
         const py = pillCY - PILL_H / 2;
@@ -1580,11 +1624,11 @@ document.getElementById('export-btn').addEventListener('click', async () => {
         ctx.stroke();
 
         if (showCourse) {
-          // 번호 원 (검정 배경, 흰 숫자)
-          const numCX = px + 4 * markerScale + NUM_R;
+          // 번호 배지 (검정 배경, 흰 숫자) — 텍스트 폭에 따라 원형 or pill형
+          const numCX = px + 4 * markerScale + numBadgeW / 2;
           const numCY = pillCY;
-          ctx.beginPath();
-          ctx.arc(numCX, numCY, NUM_R, 0, Math.PI * 2);
+          const numBadgeR = numBadgeH / 2;
+          drawRoundRect(ctx, numCX - numBadgeW / 2, numCY - numBadgeR, numBadgeW, numBadgeH, numBadgeR);
           ctx.fillStyle = '#1a1a1a';
           ctx.fill();
           ctx.fillStyle = '#fff';
@@ -1598,7 +1642,7 @@ document.getElementById('export-btn').addEventListener('click', async () => {
           ctx.font = `600 ${Math.round(13 * markerScale)}px 'Noto Sans KR', sans-serif`;
           ctx.textAlign = 'left';
           ctx.textBaseline = 'middle';
-          ctx.fillText(nameStr, numCX + NUM_R + 5 * markerScale, numCY);
+          ctx.fillText(nameStr, numCX + numBadgeW / 2 + 5 * markerScale, numCY);
         } else {
           // 지역명만 (pill 중앙 정렬)
           ctx.fillStyle = '#111';
@@ -1651,11 +1695,11 @@ document.getElementById('export-btn').addEventListener('click', async () => {
 
         // 사진 아래 pill (gap 5px)
         const pillCY = cy + PR + 5 * markerScale + 13 * markerScale; // photo bottom + gap + pill half-height
-        drawPill(cx, pillCY, String(i + 1), wp.name);
+        drawPill(cx, pillCY, numLabel, wp.name);
 
       } else {
         // ── 번호+이름 pill (겹침 방지 오프셋 적용) ────────────
-        drawPill(pt.x + ox, pt.y + oy, String(i + 1), wp.name);
+        drawPill(pt.x + ox, pt.y + oy, numLabel, wp.name);
       }
     });
 

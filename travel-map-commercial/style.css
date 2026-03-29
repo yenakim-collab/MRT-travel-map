@@ -497,9 +497,10 @@ h2 {
 }
 
 .pm-num {
-  width: 20px;
+  min-width: 20px;
   height: 20px;
-  border-radius: 50%;
+  padding: 0 5px;
+  border-radius: 10px;
   background: #1a1a1a;
   color: #fff;
   font-size: 10px;
@@ -510,6 +511,7 @@ h2 {
   flex-shrink: 0;
   font-family: 'Noto Sans KR', sans-serif;
   line-height: 1;
+  box-sizing: border-box;
 }
 
 .pm-name {
