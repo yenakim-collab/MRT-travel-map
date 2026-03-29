@@ -1103,6 +1103,23 @@ async function doSearch(query) {
 }
 
 function addWaypoint(name, lat, lng, wikiName = null) {
+  // 루프가 활성 상태에서 새 장소를 추가하면 → 루프를 실체화(첫 waypoint를 끝에 복제)한 뒤 이어 붙임
+  if (isLoop) {
+    const first = waypoints[0];
+    // 같은 장소를 또 추가하는 건 무시
+    if (Math.hypot(first.lat - lat, first.lng - lng) < 0.01 || first.name === name) {
+      searchInput.value = '';
+      closeResults();
+      return;
+    }
+    // 루프 닫기 세그먼트를 실제 waypoint로 변환
+    waypoints.push({ name: first.name, lat: first.lat, lng: first.lng, wikiName: first.wikiName, imgUrl: first.imgUrl });
+    transportModes.push(loopTransportMode);
+    isLoop = false;
+    loopTransportMode = null;
+    // 이후 아래에서 새 waypoint가 push됨
+  }
+
   // 루프 감지: 2개 이상이고 첫 waypoint와 매우 가깝거나 이름이 같으면 닫힘 세그먼트만 추가
   if (waypoints.length >= 2) {
     const first = waypoints[0];
