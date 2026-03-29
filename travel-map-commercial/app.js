@@ -306,6 +306,10 @@ async function openPhotoPicker(wpIndex) {
     const enName = await getEnglishPlaceName(wp.lat, wp.lng);
     if (enName) urls = await fetchUnsplashPhotos(enName, 6);
   }
+  // 여전히 없으면 지역명(wp.name)으로 한 번 더 시도
+  if (!urls.length && wp.name !== searchName) {
+    urls = await fetchUnsplashPhotos(wp.name, 6);
+  }
 
   if (!urls.length) {
     photoPickerGrid.innerHTML = `<div class="picker-empty">사진을 찾을 수 없어요<br><small style="color:#bbb;font-size:11px">검색어: "${searchName}"</small></div>`;
