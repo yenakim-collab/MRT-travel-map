@@ -497,6 +497,54 @@ function makeMarkerIcon(wp, i, offset = { dx: 0, dy: 0 }) {
   });
 }
 
+// ─── 루프 닫힘 곡선: A→B 직선과 겹치지 않도록 호(arc)로 그리기 ──
+// 두 점 사이 수직 방향으로 볼록한 quadratic bezier 곡선 좌표 배열 반환
+function getArcLatLngs(aLat, aLng, bLat, bLng, segments = 30) {
+  const zoom = map.getZoom();
+  const pA = map.project([aLat, aLng], zoom);
+  const pB = map.project([bLat, bLng], zoom);
+  // 두 점 사이 거리의 25%만큼 수직 오프셋
+  const dx = pB.x - pA.x, dy = pB.y - pA.y;
+  const dist = Math.hypot(dx, dy);
+  const offsetPx = Math.max(dist * 0.25, 20); // 최소 20px
+  // 수직 방향 (왼쪽으로 볼록)
+  const nx = -dy / dist, ny = dx / dist;
+  // 제어점 (중점 + 수직 오프셋)
+  const cx = (pA.x + pB.x) / 2 + nx * offsetPx;
+  const cy = (pA.y + pB.y) / 2 + ny * offsetPx;
+  const points = [];
+  for (let i = 0; i <= segments; i++) {
+    const t = i / segments;
+    const x = (1 - t) * (1 - t) * pA.x + 2 * (1 - t) * t * cx + t * t * pB.x;
+    const y = (1 - t) * (1 - t) * pA.y + 2 * (1 - t) * t * cy + t * t * pB.y;
+    const ll = map.unproject(L.point(x, y), zoom);
+    points.push([ll.lat, ll.lng]);
+  }
+  return points;
+}
+
+// 곡선 위 t 지점의 pixel 좌표 + 접선 방향(bearing) 반환
+function getArcPointAt(aLat, aLng, bLat, bLng, t) {
+  const zoom = map.getZoom();
+  const pA = map.project([aLat, aLng], zoom);
+  const pB = map.project([bLat, bLng], zoom);
+  const dx = pB.x - pA.x, dy = pB.y - pA.y;
+  const dist = Math.hypot(dx, dy);
+  const offsetPx = Math.max(dist * 0.25, 20);
+  const nx = -dy / dist, ny = dx / dist;
+  const cx = (pA.x + pB.x) / 2 + nx * offsetPx;
+  const cy = (pA.y + pB.y) / 2 + ny * offsetPx;
+  // 곡선 위 점
+  const x = (1 - t) * (1 - t) * pA.x + 2 * (1 - t) * t * cx + t * t * pB.x;
+  const y = (1 - t) * (1 - t) * pA.y + 2 * (1 - t) * t * cy + t * t * pB.y;
+  // 접선 (미분)
+  const tx = 2 * (1 - t) * (cx - pA.x) + 2 * t * (pB.x - cx);
+  const ty = 2 * (1 - t) * (cy - pA.y) + 2 * t * (pB.y - cy);
+  const bearing = (Math.atan2(tx, -ty) * 180 / Math.PI + 360) % 360;
+  const ll = map.unproject(L.point(x, y), zoom);
+  return { lat: ll.lat, lng: ll.lng, bearing };
+}
+
 // ─── 방향 화살표: pixel space 보간으로 zoom-independent 배치 ──
 // 문제: lat/lng 선형보간 ≠ Mercator 화면 선형. 줌인 시 화살표가 경로선에서 벗어남.
 // 해결: map.project()로 픽셀 좌표 변환 후 보간 → unproject로 lat/lng 복원.
@@ -517,6 +565,18 @@ function updateArrows() {
       );
       L.marker(latlng, {
         icon: makeArrowIcon(bearing),
+        interactive: false,
+        zIndexOffset: -200,
+      }).addTo(arrowLayer);
+    });
+  }
+  // isLoop 닫힘 화살표 (곡선 위 배치)
+  if (isLoop && waypoints.length >= 2) {
+    const a = waypoints[waypoints.length - 1], b = waypoints[0];
+    [0.25, 0.75].forEach((t) => {
+      const pt = getArcPointAt(a.lat, a.lng, b.lat, b.lng, t);
+      L.marker([pt.lat, pt.lng], {
+        icon: makeArrowIcon(pt.bearing),
         interactive: false,
         zIndexOffset: -200,
       }).addTo(arrowLayer);
@@ -645,12 +705,15 @@ function render() {
   if (isLoop && waypoints.length >= 2) {
     const a = waypoints[waypoints.length - 1], b = waypoints[0];
     const mode = TRANSPORT[loopTransportMode] || TRANSPORT.bus;
-    L.polyline([[a.lat, a.lng], [b.lat, b.lng]], {
+    // 곡선(arc)으로 그려서 직선 구간과 겹치지 않게
+    const arcPoints = getArcLatLngs(a.lat, a.lng, b.lat, b.lng);
+    L.polyline(arcPoints, {
       renderer: canvasRenderer, color: '#222', weight: 2.5, opacity: 0.8,
       dashArray: showBadge ? (mode.dashArray || undefined) : undefined,
     }).addTo(polylineLayer);
-    const midLat = (a.lat + b.lat) / 2, midLng = (a.lng + b.lng) / 2;
-    badgeSegments.push({ aLat: a.lat, aLng: a.lng, bLat: b.lat, bLng: b.lng, midLat, midLng, mode, modeKey: loopTransportMode });
+    // 배지 위치: 곡선 중점 (t=0.5)
+    const arcMid = getArcPointAt(a.lat, a.lng, b.lat, b.lng, 0.5);
+    badgeSegments.push({ aLat: a.lat, aLng: a.lng, bLat: b.lat, bLng: b.lng, midLat: arcMid.lat, midLng: arcMid.lng, mode, modeKey: loopTransportMode });
   }
 
   // 번호/사진 마커 (deconfliction 포함)
@@ -780,6 +843,56 @@ function renderSidebar() {
       list.appendChild(connector);
     }
   });
+
+  // ── isLoop: 닫힘 세그먼트 (마지막 → 출발지) 패널 표시 ──
+  if (isLoop && waypoints.length >= 2) {
+    // 닫힘 구간 이동수단 셀렉터
+    const loopConnector = document.createElement('div');
+    loopConnector.className = 'transport-connector';
+    loopConnector.innerHTML = `
+      <div class="connector-line"></div>
+      <select class="transport-select" data-loop="true">
+        ${Object.entries(TRANSPORT)
+          .map(
+            ([key, val]) =>
+              `<option value="${key}" ${key === loopTransportMode ? 'selected' : ''}>${val.label}</option>`
+          )
+          .join('')}
+      </select>`;
+    list.appendChild(loopConnector);
+
+    // 출발지(도착) 표시
+    const first = waypoints[0];
+    const loopItem = document.createElement('div');
+    loopItem.className = 'course-item course-item-loop';
+    const loopNum = waypoints.length + 1;
+    const loopNumOrPhoto = showPhoto
+      ? `<div class="course-photo-btn" data-i="0" title="클릭하여 사진 변경">
+           <div class="course-thumb" ${first.imgUrl ? `style="background-image:url(${first.imgUrl})"` : ''}>
+             ${!first.imgUrl ? `<svg width="13" height="13" viewBox="0 0 24 24" fill="#bbb"><path d="M21 19V5c0-1.1-.9-2-2-2H5c-1.1 0-2 .9-2 2v14c0 1.1.9 2 2 2h14c1.1 0 2-.9 2-2zM8.5 13.5l2.5 3.01L14.5 12l4.5 6H5l3.5-4.5z"/></svg>` : ''}
+             <span class="course-thumb-num">${loopNum}</span>
+           </div>
+         </div>`
+      : `<div class="course-number">${loopNum}</div>`;
+    loopItem.innerHTML = `
+      <div class="drag-handle" style="visibility:hidden">
+        <svg width="8" height="12" viewBox="0 0 8 12" fill="none"></svg>
+      </div>
+      ${loopNumOrPhoto}
+      <div class="course-name">${escapeHtml(first.name)}</div>
+      <button class="course-loop-remove" title="루프 해제">×</button>`;
+    list.appendChild(loopItem);
+
+    list.querySelector('.course-loop-remove')?.addEventListener('click', () => {
+      isLoop = false;
+      render();
+    });
+
+    list.querySelector('[data-loop="true"]')?.addEventListener('change', (e) => {
+      loopTransportMode = e.target.value;
+      render();
+    });
+  }
 
   list.querySelectorAll('.course-photo-btn').forEach((btn) => {
     btn.addEventListener('click', () => {
@@ -1273,17 +1386,15 @@ document.getElementById('export-btn').addEventListener('click', async () => {
         });
       }
 
-      // 3b. isLoop 닫힘 화살표
+      // 3b. isLoop 닫힘 화살표 (곡선 위 배치)
       if (isLoop && waypoints.length >= 2) {
         const a = waypoints[waypoints.length - 1], b = waypoints[0];
-        const bearing = calcBearing(a, b);
-        const angle = (bearing * Math.PI) / 180;
         const SIZE = 5;
-        const ptA = map.latLngToContainerPoint([a.lat, a.lng]);
-        const ptB = map.latLngToContainerPoint([b.lat, b.lng]);
         [0.25, 0.75].forEach((t) => {
-          const x = ptA.x + t * (ptB.x - ptA.x), y = ptA.y + t * (ptB.y - ptA.y);
-          ctx.save(); ctx.translate(x, y); ctx.rotate(angle);
+          const arcPt = getArcPointAt(a.lat, a.lng, b.lat, b.lng, t);
+          const pt = map.latLngToContainerPoint([arcPt.lat, arcPt.lng]);
+          const angle = (arcPt.bearing * Math.PI) / 180;
+          ctx.save(); ctx.translate(pt.x, pt.y); ctx.rotate(angle);
           ctx.beginPath(); ctx.moveTo(0,-SIZE); ctx.lineTo(SIZE*0.85,SIZE*0.9); ctx.lineTo(-SIZE*0.85,SIZE*0.9);
           ctx.closePath(); ctx.fillStyle = '#222'; ctx.fill(); ctx.restore();
         });
@@ -1292,7 +1403,11 @@ document.getElementById('export-btn').addEventListener('click', async () => {
 
     // 겹침 방지 오프셋 (화면과 동일하게 computeOffsets 적용)
     const expPts = waypoints.map(wp => map.latLngToContainerPoint([wp.lat, wp.lng]));
-    const expOffsets = computeOffsets(expPts);
+    // 배지 좌표를 장애물로 전달 (화면 렌더링과 동일하게)
+    const expBadgePts = (showBadge && showCourse)
+      ? badgeSegments.map(s => map.latLngToContainerPoint([s.midLat, s.midLng]))
+      : [];
+    const expOffsets = computeOffsets(expPts, expBadgePts);
 
     // pass 1: 리더라인 + 핀 도트 (배지보다 아래에 먼저 그림)
     waypoints.forEach((_wp, i) => {
@@ -1325,14 +1440,9 @@ document.getElementById('export-btn').addEventListener('click', async () => {
 
     // 4. 교통수단 배지 (showBadge + showCourse 둘 다 켜져야 표시)
     if (showBadge && showCourse) {
-      for (let i = 0; i < waypoints.length - 1; i++) {
-        const a = waypoints[i], b = waypoints[i + 1];
-        const pt = map.latLngToContainerPoint([
-          (a.lat + b.lat) / 2,
-          (a.lng + b.lng) / 2,
-        ]);
+      const drawBadge = (pt, modeKey) => {
+        if (modeKey && !visibleModes[modeKey]) return; // visibleModes 필터
         const R = 13;
-
         ctx.save();
         ctx.shadowColor = 'rgba(0,0,0,0.18)';
         ctx.shadowBlur = 6;
@@ -1349,26 +1459,28 @@ document.getElementById('export-btn').addEventListener('click', async () => {
         ctx.arc(pt.x, pt.y, R, 0, Math.PI * 2);
         ctx.stroke();
 
-        // SVG 아이콘 (canvas export용 preloaded img)
-        const iconImg = ICON_IMGS[transportModes[i] || 'bus'];
+        const iconImg = ICON_IMGS[modeKey || 'bus'];
         const SZ = 16;
         if (iconImg && iconImg.complete) {
           ctx.drawImage(iconImg, pt.x - SZ / 2, pt.y - SZ / 2, SZ, SZ);
         }
+      };
+
+      for (let i = 0; i < waypoints.length - 1; i++) {
+        const a = waypoints[i], b = waypoints[i + 1];
+        const pt = map.latLngToContainerPoint([
+          (a.lat + b.lat) / 2,
+          (a.lng + b.lng) / 2,
+        ]);
+        drawBadge(pt, transportModes[i] || 'bus');
       }
 
-      // 4b. isLoop 닫힘 배지
+      // 4b. isLoop 닫힘 배지 (곡선 중점)
       if (isLoop && waypoints.length >= 2) {
         const a = waypoints[waypoints.length - 1], b = waypoints[0];
-        const pt = map.latLngToContainerPoint([(a.lat+b.lat)/2, (a.lng+b.lng)/2]);
-        const R = 13;
-        ctx.save(); ctx.shadowColor='rgba(0,0,0,0.18)'; ctx.shadowBlur=6; ctx.shadowOffsetY=2;
-        ctx.beginPath(); ctx.arc(pt.x,pt.y,R,0,Math.PI*2); ctx.fillStyle='#fff'; ctx.fill(); ctx.restore();
-        ctx.strokeStyle='#333'; ctx.lineWidth=1.8;
-        ctx.beginPath(); ctx.arc(pt.x,pt.y,R,0,Math.PI*2); ctx.stroke();
-        const iconImg = ICON_IMGS[loopTransportMode || 'bus'];
-        const SZ = 16;
-        if (iconImg && iconImg.complete) ctx.drawImage(iconImg, pt.x-SZ/2, pt.y-SZ/2, SZ, SZ);
+        const arcMid = getArcPointAt(a.lat, a.lng, b.lat, b.lng, 0.5);
+        const pt = map.latLngToContainerPoint([arcMid.lat, arcMid.lng]);
+        drawBadge(pt, loopTransportMode || 'bus');
       }
     } // end showBadge
 
