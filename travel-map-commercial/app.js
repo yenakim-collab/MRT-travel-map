@@ -149,7 +149,7 @@ function loadState() {
     // 레거시 마이그레이션: 첫/마지막 waypoint 중복 감지 → isLoop으로 변환
     if (!isLoop && waypoints.length >= 3) {
       const first = waypoints[0], last = waypoints[waypoints.length - 1];
-      if (Math.hypot(first.lat - last.lat, first.lng - last.lng) < 0.05 || first.name === last.name) {
+      if (Math.hypot(first.lat - last.lat, first.lng - last.lng) < 0.002 || first.name === last.name) {
         loopTransportMode = transportModes[transportModes.length - 1] || 'bus';
         waypoints.pop();
         if (transportModes.length >= waypoints.length) transportModes.pop();
@@ -955,7 +955,7 @@ function addWaypoint(name, lat, lng, wikiName = null) {
   // 루프 감지: 2개 이상이고 첫 waypoint와 매우 가까우면 닫힘 세그먼트만 추가
   if (waypoints.length >= 2) {
     const first = waypoints[0];
-    if (Math.hypot(first.lat - lat, first.lng - lng) < 0.05) {
+    if (Math.hypot(first.lat - lat, first.lng - lng) < 0.002) {
       isLoop = true;
       loopTransportMode = transportModes[transportModes.length - 1] || 'bus';
       searchInput.value = '';
