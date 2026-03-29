@@ -1556,7 +1556,7 @@ document.getElementById('export-btn').addEventListener('click', async () => {
       const drawPill = (pillCX, pillCY, numStr, nameStr) => {
         const PILL_H = 26 * markerScale;
         const NUM_R  = 10 * markerScale;
-        ctx.font = `600 ${Math.round(13 * markerScale)}px -apple-system, sans-serif`;
+        ctx.font = `600 ${Math.round(13 * markerScale)}px 'Noto Sans KR', sans-serif`;
         const nameW = ctx.measureText(nameStr).width;
         const pillW = showCourse ? (4 * markerScale + NUM_R * 2 + 5 * markerScale + nameW + 10 * markerScale)
                                  : (10 * markerScale + nameW + 10 * markerScale);
@@ -1588,21 +1588,21 @@ document.getElementById('export-btn').addEventListener('click', async () => {
           ctx.fillStyle = '#1a1a1a';
           ctx.fill();
           ctx.fillStyle = '#fff';
-          ctx.font = `bold ${Math.round(9 * markerScale)}px -apple-system, sans-serif`;
+          ctx.font = `800 ${Math.round(10 * markerScale)}px 'Noto Sans KR', sans-serif`;
           ctx.textAlign = 'center';
           ctx.textBaseline = 'middle';
           ctx.fillText(numStr, numCX, numCY);
 
           // 지역명 (검정, 번호 오른쪽)
           ctx.fillStyle = '#111';
-          ctx.font = `600 ${Math.round(13 * markerScale)}px -apple-system, sans-serif`;
+          ctx.font = `600 ${Math.round(13 * markerScale)}px 'Noto Sans KR', sans-serif`;
           ctx.textAlign = 'left';
           ctx.textBaseline = 'middle';
           ctx.fillText(nameStr, numCX + NUM_R + 5 * markerScale, numCY);
         } else {
           // 지역명만 (pill 중앙 정렬)
           ctx.fillStyle = '#111';
-          ctx.font = `600 ${Math.round(13 * markerScale)}px -apple-system, sans-serif`;
+          ctx.font = `600 ${Math.round(13 * markerScale)}px 'Noto Sans KR', sans-serif`;
           ctx.textAlign = 'center';
           ctx.textBaseline = 'middle';
           ctx.fillText(nameStr, pillCX, pillCY);
