@@ -723,8 +723,9 @@ function render() {
     if (useCurve) {
       // 곡선 (side=1: 가는길)
       const arcPoints = getArcLatLngs(a.lat, a.lng, b.lat, b.lng, 1);
+      console.log('[DEBUG] curve segment', i, 'isLoop:', isLoop, 'points:', arcPoints.length, 'first:', arcPoints[0], 'mid:', arcPoints[15], 'last:', arcPoints[30]);
       L.polyline(arcPoints, {
-        renderer: canvasRenderer, color: '#222', weight: 2.5, opacity: 0.8,
+        renderer: canvasRenderer, color: 'red', weight: 3, opacity: 1,
         dashArray: showBadge ? (mode.dashArray || undefined) : undefined,
       }).addTo(polylineLayer);
       const arcMid = getArcPointAt(a.lat, a.lng, b.lat, b.lng, 0.5, 1);
