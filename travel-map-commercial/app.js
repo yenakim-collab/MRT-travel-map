@@ -615,7 +615,7 @@ function renderMarkers() {
     const g = { wp: waypoints[i], indices: [i], lat: waypoints[i].lat, lng: waypoints[i].lng };
     for (let j = i + 1; j < waypoints.length; j++) {
       if (assigned[j]) continue;
-      if (waypoints[j].name === waypoints[i].name && Math.hypot(waypoints[j].lat - waypoints[i].lat, waypoints[j].lng - waypoints[i].lng) < 0.01) {
+      if (waypoints[j].name === waypoints[i].name && Math.hypot(waypoints[j].lat - waypoints[i].lat, waypoints[j].lng - waypoints[i].lng) < 0.002) {
         g.indices.push(j);
         assigned[j] = true;
         // 이미지가 있는 wp 우선
@@ -1485,7 +1485,7 @@ document.getElementById('export-btn').addEventListener('click', async () => {
       const g = { wp: waypoints[i], indices: [i], lat: waypoints[i].lat, lng: waypoints[i].lng };
       for (let j = i + 1; j < waypoints.length; j++) {
         if (expAssigned[j]) continue;
-        if (waypoints[j].name === waypoints[i].name && Math.hypot(waypoints[j].lat - waypoints[i].lat, waypoints[j].lng - waypoints[i].lng) < 0.01) {
+        if (waypoints[j].name === waypoints[i].name && Math.hypot(waypoints[j].lat - waypoints[i].lat, waypoints[j].lng - waypoints[i].lng) < 0.002) {
           g.indices.push(j);
           expAssigned[j] = true;
           if (!g.wp.imgUrl && waypoints[j].imgUrl) g.wp = waypoints[j];
