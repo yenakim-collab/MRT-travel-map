@@ -570,10 +570,12 @@ function updateArrows() {
   const zoom = map.getZoom();
   for (let i = 0; i < waypoints.length - 1; i++) {
     const a = waypoints[i], b = waypoints[i + 1];
-    if (isLoop) {
-      // 루프: 곡선 위 화살표 (side=1, 가는길)
+    // badgeSegments에 curved 정보가 있으면 활용
+    const seg = badgeSegments[i];
+    const useCurve = seg ? seg.curved : (isLoop ? 1 : 0);
+    if (useCurve) {
       [0.25, 0.75].forEach((t) => {
-        const pt = getArcPointAt(a.lat, a.lng, b.lat, b.lng, t, 1);
+        const pt = getArcPointAt(a.lat, a.lng, b.lat, b.lng, t, useCurve);
         L.marker([pt.lat, pt.lng], {
           icon: makeArrowIcon(pt.bearing),
           interactive: false, zIndexOffset: -200,
@@ -702,30 +704,48 @@ function render() {
   if (showBadgeLayer && !map.hasLayer(badgeLayer)) badgeLayer.addTo(map);
   if (!showBadgeLayer && map.hasLayer(badgeLayer)) map.removeLayer(badgeLayer);
 
+  // 겹치는 세그먼트 감지: 이전 세그먼트와 역방향으로 겹치면 곡선 처리
+  // (A→B가 있는데 B→A가 나오면 둘 다 곡선)
+  const segKeys = new Set();
+  const overlapSet = new Set();
+  for (let i = 0; i < waypoints.length - 1; i++) {
+    const a = waypoints[i], b = waypoints[i + 1];
+    const fwd = `${a.name}→${b.name}`;
+    const rev = `${b.name}→${a.name}`;
+    if (segKeys.has(rev) || segKeys.has(fwd)) {
+      overlapSet.add(fwd);
+      overlapSet.add(rev);
+    }
+    segKeys.add(fwd);
+  }
+  const needsCurve = isLoop || overlapSet.size > 0;
+
   for (let i = 0; i < waypoints.length - 1; i++) {
     const a = waypoints[i];
     const b = waypoints[i + 1];
     const modeKey = transportModes[i] || 'bus';
     const mode = TRANSPORT[modeKey];
+    const segKey = `${a.name}→${b.name}`;
+    const useCurve = isLoop || overlapSet.has(segKey);
 
-    if (isLoop) {
-      // 루프: 가는길 곡선 (side=1)
+    if (useCurve) {
+      // 곡선 (side=1: 가는길)
       const arcPoints = getArcLatLngs(a.lat, a.lng, b.lat, b.lng, 1);
       L.polyline(arcPoints, {
         renderer: canvasRenderer, color: '#222', weight: 2.5, opacity: 0.8,
         dashArray: showBadge ? (mode.dashArray || undefined) : undefined,
       }).addTo(polylineLayer);
       const arcMid = getArcPointAt(a.lat, a.lng, b.lat, b.lng, 0.5, 1);
-      badgeSegments.push({ aLat: a.lat, aLng: a.lng, bLat: b.lat, bLng: b.lng, midLat: arcMid.lat, midLng: arcMid.lng, mode, modeKey });
+      badgeSegments.push({ aLat: a.lat, aLng: a.lng, bLat: b.lat, bLng: b.lng, midLat: arcMid.lat, midLng: arcMid.lng, mode, modeKey, curved: 1 });
     } else {
-      // 비루프: 직선
+      // 직선
       L.polyline([[a.lat, a.lng], [b.lat, b.lng]], {
         renderer: canvasRenderer, color: '#222', weight: 2.5, opacity: 0.8,
         dashArray: showBadge ? (mode.dashArray || undefined) : undefined,
       }).addTo(polylineLayer);
       const midLat = (a.lat + b.lat) / 2;
       const midLng = (a.lng + b.lng) / 2;
-      badgeSegments.push({ aLat: a.lat, aLng: a.lng, bLat: b.lat, bLng: b.lng, midLat, midLng, mode, modeKey });
+      badgeSegments.push({ aLat: a.lat, aLng: a.lng, bLat: b.lat, bLng: b.lng, midLat, midLng, mode, modeKey, curved: 0 });
     }
   }
 
@@ -1091,10 +1111,10 @@ async function doSearch(query) {
 }
 
 function addWaypoint(name, lat, lng, wikiName = null) {
-  // 루프 감지: 2개 이상이고 첫 waypoint와 매우 가까우면 닫힘 세그먼트만 추가
+  // 루프 감지: 2개 이상이고 첫 waypoint와 매우 가깝거나 이름이 같으면 닫힘 세그먼트만 추가
   if (waypoints.length >= 2) {
     const first = waypoints[0];
-    if (Math.hypot(first.lat - lat, first.lng - lng) < 0.002) {
+    if (Math.hypot(first.lat - lat, first.lng - lng) < 0.01 || first.name === name) {
       isLoop = true;
       loopTransportMode = transportModes[transportModes.length - 1] || 'bus';
       searchInput.value = '';
@@ -1397,10 +1417,11 @@ document.getElementById('export-btn').addEventListener('click', async () => {
 
       for (let i = 0; i < waypoints.length - 1; i++) {
         const a = waypoints[i], b = waypoints[i + 1];
-        if (isLoop) {
-          // 루프: 가는길 곡선 위 화살표 (side=1)
+        const seg = badgeSegments[i];
+        const useCurve = seg ? seg.curved : (isLoop ? 1 : 0);
+        if (useCurve) {
           [0.25, 0.75].forEach((t) => {
-            const arcPt = getArcPointAt(a.lat, a.lng, b.lat, b.lng, t, 1);
+            const arcPt = getArcPointAt(a.lat, a.lng, b.lat, b.lng, t, useCurve);
             const pt = map.latLngToContainerPoint([arcPt.lat, arcPt.lng]);
             drawArrowAt(pt.x, pt.y, (arcPt.bearing * Math.PI) / 180);
           });
@@ -1493,9 +1514,10 @@ document.getElementById('export-btn').addEventListener('click', async () => {
 
       for (let i = 0; i < waypoints.length - 1; i++) {
         const a = waypoints[i], b = waypoints[i + 1];
-        if (isLoop) {
-          // 루프: 가는길 곡선 중점 (side=1)
-          const arcMid = getArcPointAt(a.lat, a.lng, b.lat, b.lng, 0.5, 1);
+        const seg = badgeSegments[i];
+        const useCurve = seg ? seg.curved : (isLoop ? 1 : 0);
+        if (useCurve) {
+          const arcMid = getArcPointAt(a.lat, a.lng, b.lat, b.lng, 0.5, useCurve);
           const pt = map.latLngToContainerPoint([arcMid.lat, arcMid.lng]);
           drawBadge(pt, transportModes[i] || 'bus');
         } else {
