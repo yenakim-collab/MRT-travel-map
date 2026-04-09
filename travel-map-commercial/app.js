@@ -796,6 +796,7 @@ function render() {
   }
 
   renderSidebar();
+  if (typeof renderPinList === 'function') renderPinList();
 }
 
 // render without fitBounds (for drag-move)
@@ -855,6 +856,7 @@ function renderNoFit() {
   renderBadges();
   updateArrows();
   renderSidebar();
+  if (typeof renderPinList === 'function') renderPinList();
 }
 
 // ─── Sidebar ─────────────────────────────────────────────────
