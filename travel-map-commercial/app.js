@@ -2345,6 +2345,9 @@ document.querySelectorAll('.region-level-btn').forEach(btn => {
     if (level === regionLevel && regionGeoLayer) return;
     regionLevel = level;
     document.querySelectorAll('.region-level-btn').forEach(b => b.classList.toggle('active', b === btn));
+    const _rl2 = document.getElementById('region-loading');
+    if (_rl2) { _rl2.classList.add('hidden'); _rl2.innerHTML = ''; }
+    _regionLoading = false;
     loadRegionData(level);
     saveState();
   });
@@ -2470,7 +2473,7 @@ document.querySelectorAll('.sidebar-tab').forEach(tab => {
       if (map.hasLayer(tileLayer)) map.removeLayer(tileLayer);
       document.getElementById('map').style.background = mapStyleSea;
       const _rl = document.getElementById('region-loading');
-      if (_rl) _rl.classList.add('hidden');
+      if (_rl) { _rl.classList.add('hidden'); _rl.innerHTML = ''; }
       _regionLoading = false; // 이전 실패 잠금 해제
       if (!regionGeoLayer) loadRegionData(regionLevel);
       else updateRegionStyles(); // 스타일 갱신 (땅 표시)
