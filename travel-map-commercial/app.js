@@ -778,15 +778,19 @@ function render() {
   // 배지: 마커 위치 확정 후 화면 좌표 기준 충돌 체크
   renderBadges();
 
-  if (waypoints.length >= 2) {
-    // fitBounds 애니메이션 완료 후 화살표 위치 계산
-    map.once('moveend', updateArrows);
-    map.fitBounds(L.latLngBounds(waypoints.map((wp) => [wp.lat, wp.lng])), {
-      padding: [60, 80],
-    });
-  } else if (waypoints.length === 1) {
-    map.setView([waypoints[0].lat, waypoints[0].lng], 8);
-    updateArrows();
+  if (!regionMode) {
+    if (waypoints.length >= 2) {
+      // fitBounds 애니메이션 완료 후 화살표 위치 계산
+      map.once('moveend', updateArrows);
+      map.fitBounds(L.latLngBounds(waypoints.map((wp) => [wp.lat, wp.lng])), {
+        padding: [60, 80],
+      });
+    } else if (waypoints.length === 1) {
+      map.setView([waypoints[0].lat, waypoints[0].lng], 8);
+      updateArrows();
+    } else {
+      updateArrows();
+    }
   } else {
     updateArrows();
   }
@@ -1237,7 +1241,7 @@ function addWaypoint(name, lat, lng, wikiName = null) {
     fetchLocationImage(waypoints[idx].wikiName, waypoints[idx].lat, waypoints[idx].lng).then((url) => {
       if (url && waypoints[idx]) {
         waypoints[idx].imgUrl = url;
-        render();
+        renderNoFit();
       }
     });
   }
