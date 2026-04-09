@@ -2230,7 +2230,7 @@ function buildRegionLayer(geojson) {
         if (!regionMode) return;
         L.DomEvent.stopPropagation(e);
         if (!name) return;
-        if (regionColor === null) {
+        if (regionColor === null || paintedRegions[name]) {
           delete paintedRegions[name];
         } else {
           paintedRegions[name] = regionColor;
@@ -2336,10 +2336,37 @@ function closeRegionSearch() {
   regionSearchResults.innerHTML = '';
 }
 
+// 한글 자모 분해 (초성+중성+종성)
+const _CHO = 'ㄱㄲㄴㄷㄸㄹㅁㅂㅃㅅㅆㅇㅈㅉㅊㅋㅌㅍㅎ'.split('');
+const _JUNG = 'ㅏㅐㅑㅒㅓㅔㅕㅖㅗㅘㅙㅚㅛㅜㅝㅞㅟㅠㅡㅢㅣ'.split('');
+const _JONG = ['','ㄱ','ㄲ','ㄳ','ㄴ','ㄵ','ㄶ','ㄷ','ㄹ','ㄺ','ㄻ','ㄼ','ㄽ','ㄾ','ㄿ','ㅀ','ㅁ','ㅂ','ㅄ','ㅅ','ㅆ','ㅇ','ㅈ','ㅊ','ㅋ','ㅌ','ㅍ','ㅎ'];
+function decomposeKo(str) {
+  let result = '';
+  for (const ch of str) {
+    const code = ch.charCodeAt(0) - 0xAC00;
+    if (code < 0 || code > 11171) { result += ch; continue; }
+    result += _CHO[Math.floor(code / 588)] + _JUNG[Math.floor((code % 588) / 28)] + _JONG[code % 28];
+  }
+  return result;
+}
+// 초성만 추출
+function chosungOf(str) {
+  let result = '';
+  for (const ch of str) {
+    const code = ch.charCodeAt(0) - 0xAC00;
+    if (code < 0 || code > 11171) { result += ch; continue; }
+    result += _CHO[Math.floor(code / 588)];
+  }
+  return result;
+}
+function isChosung(str) { return /^[ㄱ-ㅎ]+$/.test(str); }
+
 function doRegionSearch(q) {
-  // 한국어 입력이면 영문으로 변환해서도 매칭
   const qLower = q.toLowerCase();
-  // 정확히 일치 또는 부분 일치하는 한글 키 모두 찾기
+  const qDecomp = decomposeKo(qLower);
+  const qIsCho = isChosung(q);
+
+  // KO_NAME_MAP에서 한글→영문 매핑
   const mappedEns = [];
   const exact = KO_NAME_MAP[q] || KO_NAME_MAP[qLower];
   if (exact) mappedEns.push(exact.toLowerCase());
@@ -2354,9 +2381,24 @@ function doRegionSearch(q) {
       const n = f.name.toLowerCase();
       const a = f.admin.toLowerCase();
       const alt = f.alt.toLowerCase();
+      // 기본 부분일치
       if (n.includes(qLower) || a.includes(qLower) || alt.includes(qLower)) return true;
+      // KO_NAME_MAP 매핑
       for (const en of mappedEns) {
         if (n.includes(en) || a.includes(en)) return true;
+      }
+      // 한글 자모 분해 매칭 (알버타 ↔ 앨버타)
+      if (qDecomp !== qLower) {
+        const altDecomp = decomposeKo(alt);
+        if (altDecomp.includes(qDecomp)) return true;
+      }
+      // 초성 매칭: 초성만 입력(ㅋㄹㄹ) 또는 일반 한글(알버타→ㅇㅂㅌ ↔ 앨버타→ㅇㅂㅌ)
+      if (alt) {
+        const qCho = qIsCho ? q : chosungOf(qLower);
+        if (qCho.length >= 2) {
+          const altCho = chosungOf(alt);
+          if (altCho.includes(qCho)) return true;
+        }
       }
       return false;
     })
@@ -2365,7 +2407,7 @@ function doRegionSearch(q) {
 }
 
 function selectRegionResult(name, layer) {
-  if (regionColor === null) {
+  if (regionColor === null || paintedRegions[name]) {
     delete paintedRegions[name];
   } else {
     paintedRegions[name] = regionColor || '#5B9BD5';
