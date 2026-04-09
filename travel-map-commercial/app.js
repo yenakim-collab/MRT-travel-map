@@ -19,15 +19,12 @@ const map = L.map('map', {
 });
 map.fitBounds([[-75, -165], [75, 165]]);
 
-// ─── 지형 타일 (MapTiler Voyager – 상업 무료 플랜) ────────────
-// ✅ 상업적 사용 허용 (무료 플랜: 월 100,000 맵로드)
-// ✅ API 키 필요 → https://cloud.maptiler.com 에서 무료 계정 생성 후 발급
-// crossOrigin: anonymous → 타일 이미지를 canvas에 drawImage 가능 (export용)
-const MAPTILER_KEY = 'lTutsYkcVmdFzWKdIJqy';
-L.tileLayer(`https://api.maptiler.com/maps/dataviz/{z}/{x}/{y}.png?key=${MAPTILER_KEY}`, {
+// ─── 지형 타일 (CartoDB Positron No Labels – 깔끔, 텍스트 없음) ──
+const tileLayer = L.tileLayer('https://{s}.basemaps.cartocdn.com/light_nolabels/{z}/{x}/{y}{r}.png', {
   crossOrigin: 'anonymous',
-  attribution: '© <a href="https://www.maptiler.com/copyright/">MapTiler</a> © <a href="https://www.openstreetmap.org/copyright">OpenStreetMap contributors</a>',
+  attribution: '© <a href="https://www.openstreetmap.org/copyright">OpenStreetMap</a> © <a href="https://carto.com/attributions">CARTO</a>',
   maxZoom: 19,
+  subdomains: 'abcd',
 }).addTo(map);
 
 // flex 레이아웃 계산 완료 후 컨테이너 크기 재반영 + 저장된 코스 복원
@@ -77,20 +74,8 @@ function fixAntimeridian(obj) {
   return fixFeature({ type: 'Feature', geometry: obj, properties: {} }).geometry;
 }
 
-// ─── World base map (TopoJSON, canvas renderer) ──────────────
-fetch('https://cdn.jsdelivr.net/npm/world-atlas@2/countries-50m.json')
-  .then((r) => r.json())
-  .then((world) => {
-    // 국가 간 경계선 (타일 위에 오버레이)
-    L.geoJSON(
-      fixAntimeridian(topojson.mesh(world, world.objects.countries, (a, b) => a !== b)),
-      {
-        renderer: canvasRenderer,
-        style: { fill: false, color: '#F5F3F3', weight: 1.5, opacity: 1 },
-        interactive: false,
-      }
-    ).addTo(map);
-  });
+// ─── World base map ──────────────────────────────────────────
+// 국가 경계선은 색칠 레이어(admin-1)가 대체하므로 별도 로드하지 않음
 
 // ─── State ──────────────────────────────────────────────────
 let waypoints = [];           // [{ name, lat, lng, wikiName, imgUrl }]
@@ -490,7 +475,8 @@ function makeMarkerIcon(wp, i, offset = { dx: 0, dy: 0 }, numLabel = null) {
     : '';
   const displayNum = numLabel != null ? numLabel : String(i + 1);
   const numHtml = showCourse ? `<span class="pm-num">${displayNum}</span>` : '';
-  const pill = `<div class="pm-pill${showCourse ? '' : ' pm-pill--nonum'}">${numHtml}<span class="pm-name">${wp.name}</span></div>`;
+  const bubbleCls = markerStyle === 'bubble' ? ' pm-pill--bubble' : '';
+  const pill = `<div class="pm-pill${showCourse ? '' : ' pm-pill--nonum'}${bubbleCls}">${numHtml}<span class="pm-name">${wp.name}</span></div>`;
 
   let inner = '';
   if (hasOffset) {
@@ -649,13 +635,26 @@ function renderMarkers() {
     }
   });
 
-  // 패스 2: 유닛 (그룹핑된 번호 표시)
+  // 패스 2: 유닛 (그룹핑된 번호 표시, 드래그 가능)
   groups.forEach((g, gi) => {
     const numLabel = g.indices.map(idx => idx + 1).join(' · ');
-    L.marker([g.lat, g.lng], {
+    const m = L.marker([g.lat, g.lng], {
       icon: makeMarkerIcon(g.wp, g.indices[0], offsets[gi], numLabel),
       zIndexOffset: 500 + g.indices[0] * 10,
+      draggable: !isPinMode,
     }).addTo(markerLayer);
+
+    m.on('dragstart', () => {
+      m.setZIndexOffset(10000);
+    });
+    m.on('dragend', () => {
+      const { lat, lng } = m.getLatLng();
+      g.indices.forEach(idx => {
+        waypoints[idx].lat = lat;
+        waypoints[idx].lng = lng;
+      });
+      renderNoFit();
+    });
   });
 }
 
@@ -793,6 +792,65 @@ function render() {
     updateArrows();
   }
 
+  renderSidebar();
+}
+
+// render without fitBounds (for drag-move)
+function renderNoFit() {
+  saveState();
+  polylineLayer.clearLayers();
+  badgeLayer.clearLayers();
+  arrowLayer.clearLayers();
+  markerLayer.clearLayers();
+  badgeSegments = [];
+
+  if (showCourse && !map.hasLayer(polylineLayer)) polylineLayer.addTo(map);
+  if (!showCourse && map.hasLayer(polylineLayer)) map.removeLayer(polylineLayer);
+  if (showCourse && !map.hasLayer(arrowLayer)) arrowLayer.addTo(map);
+  if (!showCourse && map.hasLayer(arrowLayer)) map.removeLayer(arrowLayer);
+  const showBadgeLayer = showBadge && showCourse;
+  if (showBadgeLayer && !map.hasLayer(badgeLayer)) badgeLayer.addTo(map);
+  if (!showBadgeLayer && map.hasLayer(badgeLayer)) map.removeLayer(badgeLayer);
+
+  const segKeys = new Set();
+  const overlapSet = new Set();
+  for (let i = 0; i < waypoints.length - 1; i++) {
+    const a = waypoints[i], b = waypoints[i + 1];
+    const fwd = `${a.name}→${b.name}`;
+    const rev = `${b.name}→${a.name}`;
+    if (segKeys.has(rev) || segKeys.has(fwd)) { overlapSet.add(fwd); overlapSet.add(rev); }
+    segKeys.add(fwd);
+  }
+
+  for (let i = 0; i < waypoints.length - 1; i++) {
+    const a = waypoints[i], b = waypoints[i + 1];
+    const modeKey = transportModes[i] || 'bus';
+    const mode = TRANSPORT[modeKey];
+    const segKey = `${a.name}→${b.name}`;
+    const useCurve = isLoop || overlapSet.has(segKey);
+    if (useCurve) {
+      const arcPoints = getArcLatLngs(a.lat, a.lng, b.lat, b.lng, 1);
+      L.polyline(arcPoints, { renderer: canvasRenderer, color: '#222', weight: 2.5, opacity: 0.8, dashArray: showBadge ? (mode.dashArray || undefined) : undefined }).addTo(polylineLayer);
+      const arcMid = getArcPointAt(a.lat, a.lng, b.lat, b.lng, 0.5, 1);
+      badgeSegments.push({ aLat: a.lat, aLng: a.lng, bLat: b.lat, bLng: b.lng, midLat: arcMid.lat, midLng: arcMid.lng, mode, modeKey, curved: 1 });
+    } else {
+      L.polyline([[a.lat, a.lng], [b.lat, b.lng]], { renderer: canvasRenderer, color: '#222', weight: 2.5, opacity: 0.8, dashArray: showBadge ? (mode.dashArray || undefined) : undefined }).addTo(polylineLayer);
+      const midLat = (a.lat + b.lat) / 2, midLng = (a.lng + b.lng) / 2;
+      badgeSegments.push({ aLat: a.lat, aLng: a.lng, bLat: b.lat, bLng: b.lng, midLat, midLng, mode, modeKey, curved: 0 });
+    }
+  }
+  if (isLoop && waypoints.length >= 2) {
+    const a = waypoints[waypoints.length - 1], b = waypoints[0];
+    const mode = TRANSPORT[loopTransportMode] || TRANSPORT.bus;
+    const arcPoints = getArcLatLngs(a.lat, a.lng, b.lat, b.lng, 1);
+    L.polyline(arcPoints, { renderer: canvasRenderer, color: '#222', weight: 2.5, opacity: 0.8, dashArray: showBadge ? (mode.dashArray || undefined) : undefined }).addTo(polylineLayer);
+    const arcMid = getArcPointAt(a.lat, a.lng, b.lat, b.lng, 0.5, 1);
+    badgeSegments.push({ aLat: a.lat, aLng: a.lng, bLat: b.lat, bLng: b.lng, midLat: arcMid.lat, midLng: arcMid.lng, mode, modeKey: loopTransportMode });
+  }
+
+  renderMarkers();
+  renderBadges();
+  updateArrows();
   renderSidebar();
 }
 
@@ -1722,6 +1780,756 @@ function escapeHtml(str) {
     .replace(/&/g, '&amp;').replace(/</g, '&lt;')
     .replace(/>/g, '&gt;').replace(/"/g, '&quot;');
 }
+
+// ─── Home button (전체보기) ─────────────────────────────────
+document.getElementById('home-btn')?.addEventListener('click', () => {
+  if (waypoints.length >= 2) {
+    map.fitBounds(L.latLngBounds(waypoints.map(wp => [wp.lat, wp.lng])), { padding: [60, 80] });
+  } else if (waypoints.length === 1) {
+    map.setView([waypoints[0].lat, waypoints[0].lng], 8);
+  } else {
+    map.fitBounds([[-75, -165], [75, 165]]);
+  }
+});
+
+// ─── Region Painting (지역 색칠) ─────────────────────────────
+let regionMode = false;
+let regionColor = '#2196F3';
+let paintedRegions = {};
+let regionGeoLayer = null;
+let showRegions = true;
+let regionLevel = 'country'; // 'country' or 'admin1'
+const regionLayer = L.layerGroup();
+
+// ── Map style settings ──
+let mapStyleSea = '#BEE8FF';
+let mapStyleLand = '#E8EAED';
+let mapStyleBorder = 0.6;
+let markerStyle = 'pill'; // 'pill' | 'bubble'
+
+// 데이터 캐시 (레벨 전환 시 재로드 방지)
+let _countryData = null;
+let _admin1Data = null;
+let _regionLoading = false;
+
+// 레이어에 속한 모든 feature의 name 캐시 (검색용)
+let _regionFeatureIndex = []; // [{ name, admin, layer }]
+
+// ── 한국어 국가명/지역명 매핑 ──
+const KO_NAME_MAP = {
+  // 주요 국가
+  '일본':'Japan','중국':'China','한국':'South Korea','대한민국':'South Korea','북한':'North Korea','조선':'North Korea',
+  '미국':'United States of America','영국':'United Kingdom','프랑스':'France','독일':'Germany','이탈리아':'Italy',
+  '스페인':'Spain','포르투갈':'Portugal','네덜란드':'Netherlands','벨기에':'Belgium','스위스':'Switzerland',
+  '오스트리아':'Austria','폴란드':'Poland','체코':'Czechia','헝가리':'Hungary','그리스':'Greece',
+  '터키':'Turkey','튀르키예':'Turkey','러시아':'Russia','우크라이나':'Ukraine','스웨덴':'Sweden',
+  '노르웨이':'Norway','덴마크':'Denmark','핀란드':'Finland','아이슬란드':'Iceland','아일랜드':'Ireland',
+  '캐나다':'Canada','멕시코':'Mexico','브라질':'Brazil','아르헨티나':'Argentina','칠레':'Chile',
+  '페루':'Peru','콜롬비아':'Colombia','호주':'Australia','뉴질랜드':'New Zealand',
+  '인도':'India','태국':'Thailand','베트남':'Vietnam','필리핀':'Philippines','인도네시아':'Indonesia',
+  '말레이시아':'Malaysia','싱가포르':'Singapore','대만':'Taiwan','몽골':'Mongolia','카자흐스탄':'Kazakhstan',
+  '이집트':'Egypt','남아프리카':'South Africa','모로코':'Morocco','케냐':'Kenya','에티오피아':'Ethiopia',
+  '사우디아라비아':'Saudi Arabia','아랍에미리트':'United Arab Emirates','이란':'Iran','이라크':'Iraq','이스라엘':'Israel',
+  '크로아티아':'Croatia','루마니아':'Romania','불가리아':'Bulgaria','세르비아':'Serbia',
+  // 일본 지역
+  '도쿄':'Tokyo','오사카':'Ōsaka','교토':'Kyōto','홋카이도':'Hokkaidō','후쿠오카':'Fukuoka',
+  '오키나와':'Okinawa','나고야':'Aichi','나라':'Nara','히로시마':'Hiroshima','삿포로':'Hokkaidō',
+  // 한국 지역
+  '서울':'Seoul','부산':'Busan','인천':'Incheon','대구':'Daegu','대전':'Daejeon',
+  '광주':'Gwangju','울산':'Ulsan','세종':'Sejong','경기':'Gyeonggi','강원':'Gangwon',
+  '충북':'Chungcheongbuk','충남':'Chungcheongnam','전북':'Jeollabuk','전남':'Jeollanam',
+  '경북':'Gyeongsangbuk','경남':'Gyeongsangnam','제주':'Jeju',
+  // 중국 지역
+  '베이징':'Beijing','상하이':'Shanghai','광저우':'Guangdong','홍콩':'Hong Kong','마카오':'Macau',
+  // 미국 지역
+  '뉴욕':'New York','캘리포니아':'California','하와이':'Hawaii','텍사스':'Texas','플로리다':'Florida',
+};
+
+// 역매핑 (English→Korean) - 검색 결과에 한글명도 보여주기 위해
+const KO_REVERSE_MAP = {};
+for (const [ko, en] of Object.entries(KO_NAME_MAP)) {
+  const enLower = en.toLowerCase();
+  if (!KO_REVERSE_MAP[enLower]) KO_REVERSE_MAP[enLower] = [];
+  KO_REVERSE_MAP[enLower].push(ko);
+}
+
+const REGION_COLORS = [
+  '#CBE7FD','#A7D4F9','#79BEF5',  // Blue
+  '#94E7D1','#71D2B8','#58CAAB',  // Teal
+  '#C7DE8D',                       // Green
+  '#FFE182','#FFD74E','#FFC929',  // Yellow
+  '#FFAEA1','#FF8D7C','#FE6A54',  // Red
+  '#D0B4FD','#B080FF','#A26EF7',  // Purple
+  '#666D75','#848C94',             // Gray
+];
+let regionPalette = [...REGION_COLORS];
+
+function regionName(f) {
+  const p = f.properties || {};
+  return p.name || p.NAME || p.name_en || p.state_name || p.NOMGEO || p.NOM_ENT || p.ESTADO || p.gn_name || p.NAME_1 || '';
+}
+function regionAdmin(f) {
+  const p = f.properties || {};
+  return p.admin || p.ADM0_A3 || p.adm0_a3 || p.sov_a3 || '';
+}
+
+// ── Palette UI ──
+function renderRegionPalette() {
+  const el = document.getElementById('region-palette');
+  if (!el) return;
+  el.innerHTML = '';
+  const eraser = document.createElement('div');
+  eraser.className = 'region-swatch eraser' + (regionColor === null ? ' active' : '');
+  eraser.innerHTML = '✕';
+  eraser.title = '지우개';
+  eraser.addEventListener('click', () => { regionColor = null; renderRegionPalette(); });
+  el.appendChild(eraser);
+  regionPalette.forEach(c => {
+    const sw = document.createElement('div');
+    sw.className = 'region-swatch' + (regionColor === c ? ' active' : '');
+    sw.style.background = c;
+    sw.style.boxShadow = `0 2px 6px ${c}40`;
+    sw.addEventListener('click', () => { regionColor = c; renderRegionPalette(); });
+    el.appendChild(sw);
+  });
+}
+
+// ── HSV Color Picker ──
+(function() {
+  const overlay = document.getElementById('color-picker-overlay');
+  const svCanvas = document.getElementById('color-picker-sv');
+  const hueCanvas = document.getElementById('color-picker-hue');
+  const preview = document.getElementById('color-picker-preview');
+  if (!overlay || !svCanvas || !hueCanvas) return;
+
+  const svCtx = svCanvas.getContext('2d');
+  const hueCtx = hueCanvas.getContext('2d');
+  let pickerH = 0, pickerS = 1, pickerV = 1;
+  let draggingSV = false, draggingHue = false;
+
+  function hsvToRgb(h, s, v) {
+    let r, g, b;
+    const i = Math.floor(h / 60) % 6;
+    const f = h / 60 - Math.floor(h / 60);
+    const p = v * (1 - s), q = v * (1 - f * s), t = v * (1 - (1 - f) * s);
+    switch (i) {
+      case 0: r = v; g = t; b = p; break;
+      case 1: r = q; g = v; b = p; break;
+      case 2: r = p; g = v; b = t; break;
+      case 3: r = p; g = q; b = v; break;
+      case 4: r = t; g = p; b = v; break;
+      case 5: r = v; g = p; b = q; break;
+    }
+    return [Math.round(r * 255), Math.round(g * 255), Math.round(b * 255)];
+  }
+
+  function hsvToHex(h, s, v) {
+    const [r, g, b] = hsvToRgb(h, s, v);
+    return '#' + [r, g, b].map(x => x.toString(16).padStart(2, '0')).join('').toUpperCase();
+  }
+
+  function drawSVPanel(hue) {
+    const w = svCanvas.width, h = svCanvas.height;
+    const baseColor = hsvToRgb(hue, 1, 1);
+    const img = svCtx.createImageData(w, h);
+    for (let y = 0; y < h; y++) {
+      for (let x = 0; x < w; x++) {
+        const s = x / w, v = 1 - y / h;
+        const r = (baseColor[0] * s + 255 * (1 - s)) * v;
+        const g = (baseColor[1] * s + 255 * (1 - s)) * v;
+        const b = (baseColor[2] * s + 255 * (1 - s)) * v;
+        const idx = (y * w + x) * 4;
+        img.data[idx] = r; img.data[idx + 1] = g; img.data[idx + 2] = b; img.data[idx + 3] = 255;
+      }
+    }
+    svCtx.putImageData(img, 0, 0);
+    // draw cursor
+    const cx = pickerS * w, cy = (1 - pickerV) * h;
+    svCtx.beginPath();
+    svCtx.arc(cx, cy, 7, 0, Math.PI * 2);
+    svCtx.strokeStyle = '#fff';
+    svCtx.lineWidth = 2.5;
+    svCtx.stroke();
+    svCtx.beginPath();
+    svCtx.arc(cx, cy, 7, 0, Math.PI * 2);
+    svCtx.strokeStyle = 'rgba(0,0,0,0.3)';
+    svCtx.lineWidth = 1;
+    svCtx.stroke();
+  }
+
+  function drawHueBar() {
+    const w = hueCanvas.width, h = hueCanvas.height;
+    const grad = hueCtx.createLinearGradient(0, 0, w, 0);
+    for (let i = 0; i <= 6; i++) {
+      const [r, g, b] = hsvToRgb(i * 60, 1, 1);
+      grad.addColorStop(i / 6, `rgb(${r},${g},${b})`);
+    }
+    hueCtx.fillStyle = grad;
+    // rounded rect
+    const radius = 10;
+    hueCtx.beginPath();
+    hueCtx.moveTo(radius, 0);
+    hueCtx.lineTo(w - radius, 0);
+    hueCtx.quadraticCurveTo(w, 0, w, radius);
+    hueCtx.lineTo(w, h - radius);
+    hueCtx.quadraticCurveTo(w, h, w - radius, h);
+    hueCtx.lineTo(radius, h);
+    hueCtx.quadraticCurveTo(0, h, 0, h - radius);
+    hueCtx.lineTo(0, radius);
+    hueCtx.quadraticCurveTo(0, 0, radius, 0);
+    hueCtx.closePath();
+    hueCtx.fill();
+    // draw cursor
+    const cx = (pickerH / 360) * w;
+    hueCtx.beginPath();
+    hueCtx.arc(cx, h / 2, 8, 0, Math.PI * 2);
+    hueCtx.fillStyle = '#fff';
+    hueCtx.fill();
+    hueCtx.strokeStyle = 'rgba(0,0,0,0.2)';
+    hueCtx.lineWidth = 1.5;
+    hueCtx.stroke();
+  }
+
+  function updatePreview() {
+    preview.style.background = hsvToHex(pickerH, pickerS, pickerV);
+  }
+
+  function redraw() {
+    drawSVPanel(pickerH);
+    drawHueBar();
+    updatePreview();
+  }
+
+  function getPos(canvas, e) {
+    const rect = canvas.getBoundingClientRect();
+    const t = e.touches ? e.touches[0] : e;
+    return {
+      x: Math.max(0, Math.min(canvas.width, (t.clientX - rect.left) * (canvas.width / rect.width))),
+      y: Math.max(0, Math.min(canvas.height, (t.clientY - rect.top) * (canvas.height / rect.height))),
+    };
+  }
+
+  // SV panel events
+  function onSVMove(e) {
+    const p = getPos(svCanvas, e);
+    pickerS = p.x / svCanvas.width;
+    pickerV = 1 - p.y / svCanvas.height;
+    redraw();
+  }
+  svCanvas.addEventListener('mousedown', e => { draggingSV = true; onSVMove(e); });
+  svCanvas.addEventListener('touchstart', e => { draggingSV = true; onSVMove(e); e.preventDefault(); }, { passive: false });
+  window.addEventListener('mousemove', e => { if (draggingSV) onSVMove(e); });
+  window.addEventListener('touchmove', e => { if (draggingSV) onSVMove(e); }, { passive: true });
+  window.addEventListener('mouseup', () => { draggingSV = false; });
+  window.addEventListener('touchend', () => { draggingSV = false; });
+
+  // Hue bar events
+  function onHueMove(e) {
+    const p = getPos(hueCanvas, e);
+    pickerH = (p.x / hueCanvas.width) * 360;
+    redraw();
+  }
+  hueCanvas.addEventListener('mousedown', e => { draggingHue = true; onHueMove(e); });
+  hueCanvas.addEventListener('touchstart', e => { draggingHue = true; onHueMove(e); e.preventDefault(); }, { passive: false });
+  window.addEventListener('mousemove', e => { if (draggingHue) onHueMove(e); });
+  window.addEventListener('touchmove', e => { if (draggingHue) onHueMove(e); }, { passive: true });
+  window.addEventListener('mouseup', () => { draggingHue = false; });
+  window.addEventListener('touchend', () => { draggingHue = false; });
+
+  // Open
+  document.getElementById('region-custom-btn')?.addEventListener('click', () => {
+    pickerH = 200; pickerS = 0.7; pickerV = 0.9;
+    redraw();
+    overlay.classList.add('visible');
+  });
+
+  // Close
+  document.getElementById('color-picker-close')?.addEventListener('click', () => {
+    overlay.classList.remove('visible');
+  });
+  overlay.addEventListener('click', e => {
+    if (e.target === overlay) overlay.classList.remove('visible');
+  });
+
+  // Select
+  document.getElementById('color-picker-select')?.addEventListener('click', () => {
+    const c = hsvToHex(pickerH, pickerS, pickerV);
+    if (!regionPalette.includes(c)) regionPalette.push(c);
+    regionColor = c;
+    renderRegionPalette();
+    overlay.classList.remove('visible');
+    saveState();
+  });
+})();
+
+// ── Region list UI ──
+function renderRegionList() {
+  const list = document.getElementById('region-list');
+  const countEl = document.getElementById('region-count');
+  if (!list || !countEl) return;
+  const entries = Object.entries(paintedRegions);
+  countEl.textContent = entries.length;
+  const clearAllBtn = document.getElementById('region-clear-all');
+  if (clearAllBtn) clearAllBtn.style.display = entries.length > 0 ? 'inline-block' : 'none';
+  if (!entries.length) {
+    list.innerHTML = '<div class="region-empty">지도에서 지역을 클릭하세요</div>';
+    return;
+  }
+  list.innerHTML = '';
+  entries.forEach(([name, color]) => {
+    const item = document.createElement('div');
+    item.className = 'region-item';
+    item.innerHTML = `<div class="region-item-dot" style="background:${color}"></div><span class="region-item-name">${escapeHtml(name)}</span><button class="region-item-remove" data-name="${escapeHtml(name)}">✕</button>`;
+    list.appendChild(item);
+  });
+  list.querySelectorAll('.region-item-remove').forEach(btn => {
+    btn.addEventListener('click', () => {
+      delete paintedRegions[btn.dataset.name];
+      updateRegionStyles();
+      renderRegionList();
+      saveState();
+    });
+  });
+}
+
+// ── Style helpers ──
+function regionStyleFor(name) {
+  const color = paintedRegions[name];
+  if (regionMode) {
+    return {
+      fillColor: color || mapStyleLand,
+      fillOpacity: 1,
+      stroke: true,
+      color: '#fff',
+      weight: mapStyleBorder,
+      opacity: 1,
+      interactive: true,
+    };
+  }
+  return {
+    fillColor: color || 'transparent',
+    fillOpacity: color ? 1 : 0,
+    stroke: !!color,
+    color: color ? '#999' : 'transparent',
+    weight: color ? mapStyleBorder : 0,
+    opacity: color ? 0.6 : 0,
+    interactive: true,
+  };
+}
+
+function updateRegionStyles() {
+  if (!regionGeoLayer) return;
+  regionGeoLayer.eachLayer(layer => {
+    layer.setStyle(regionStyleFor(regionName(layer.feature)));
+  });
+}
+
+// ── 전체 삭제 버튼 ──
+document.getElementById('region-clear-all')?.addEventListener('click', () => {
+  paintedRegions = {};
+  updateRegionStyles();
+  renderRegionList();
+  saveState();
+});
+
+// ── Build Leaflet GeoJSON layer from data ──
+const regionTooltip = document.getElementById('region-tooltip');
+
+function buildRegionLayer(geojson) {
+  if (regionGeoLayer) { regionLayer.removeLayer(regionGeoLayer); }
+  _regionFeatureIndex = [];
+  const fixed = fixAntimeridian(geojson);
+  regionGeoLayer = L.geoJSON(fixed, {
+    renderer: canvasRenderer,
+    style: feature => regionStyleFor(regionName(feature)),
+    onEachFeature: (feature, layer) => {
+      const name = regionName(feature);
+      const admin = regionAdmin(feature);
+      // 검색용 대체 이름 수집 (한국어 역매핑 + name_local 등)
+      const p = feature.properties || {};
+      const altNames = [];
+      // GeoJSON 속 로컬 이름 필드
+      [p.name_local, p.name_alt, p.name_zh, p.name_ja, p.name_ko, p.woe_name, p.gn_name].forEach(v => {
+        if (v && v !== name) altNames.push(v);
+      });
+      // KO_REVERSE_MAP에서 한글명 가져오기
+      const koNames = KO_REVERSE_MAP[name.toLowerCase()] || [];
+      koNames.forEach(ko => altNames.push(ko));
+      const koAdminNames = KO_REVERSE_MAP[admin.toLowerCase()] || [];
+      koAdminNames.forEach(ko => altNames.push(ko));
+
+      _regionFeatureIndex.push({ name, admin, layer, alt: altNames.join(' ') });
+      layer.on('click', (e) => {
+        if (!regionMode) return;
+        L.DomEvent.stopPropagation(e);
+        if (!name) return;
+        if (regionColor === null) {
+          delete paintedRegions[name];
+        } else {
+          paintedRegions[name] = regionColor;
+        }
+        layer.setStyle(regionStyleFor(name));
+        renderRegionList();
+        saveState();
+      });
+      layer.on('mouseover', (e) => {
+        if (!regionMode) return;
+        layer.setStyle({ stroke: true, weight: 1.5, color: '#888', opacity: 1 });
+        if (!L.Browser.ie && !L.Browser.opera && !L.Browser.edge) layer.bringToFront();
+        // 툴팁 표시
+        if (regionTooltip && name) {
+          const koLabel = (KO_REVERSE_MAP[name.toLowerCase()] || [])[0];
+          regionTooltip.textContent = koLabel ? `${name} (${koLabel})` : name;
+          regionTooltip.style.display = 'block';
+          const pt = e.containerPoint || map.latLngToContainerPoint(e.latlng);
+          regionTooltip.style.left = pt.x + 'px';
+          regionTooltip.style.top = pt.y + 'px';
+        }
+      });
+      layer.on('mousemove', (e) => {
+        if (!regionMode || !regionTooltip) return;
+        const pt = e.containerPoint || map.latLngToContainerPoint(e.latlng);
+        regionTooltip.style.left = pt.x + 'px';
+        regionTooltip.style.top = pt.y + 'px';
+      });
+      layer.on('mouseout', () => {
+        layer.setStyle(regionStyleFor(regionName(feature)));
+        if (regionTooltip) regionTooltip.style.display = 'none';
+      });
+    },
+  });
+  regionLayer.addLayer(regionGeoLayer);
+  regionLayer.bringToBack();
+}
+
+// ── Data fetching ──
+async function fetchFirstOk(urls) {
+  for (const url of urls) {
+    try { const r = await fetch(url); if (r.ok) return await r.json(); } catch {}
+  }
+  return null;
+}
+
+async function loadCountryData() {
+  if (_countryData) return _countryData;
+  const topo = await fetchFirstOk([
+    'https://cdn.jsdelivr.net/npm/world-atlas@2/countries-50m.json',
+    'https://unpkg.com/world-atlas@2/countries-50m.json',
+  ]);
+  if (!topo) return null;
+  const key = Object.keys(topo.objects)[0];
+  _countryData = topojson.feature(topo, topo.objects[key]);
+  return _countryData;
+}
+
+async function loadAdmin1Data() {
+  if (_admin1Data) return _admin1Data;
+  const data = await fetch('https://raw.githubusercontent.com/nvkelso/natural-earth-vector/master/geojson/ne_10m_admin_1_states_provinces.geojson')
+    .then(r => { if (!r.ok) throw new Error(); return r.json(); });
+  _admin1Data = data;
+  return _admin1Data;
+}
+
+async function loadRegionData(level) {
+  if (_regionLoading) return;
+  _regionLoading = true;
+  const loadingEl = document.getElementById('region-loading');
+  if (loadingEl) { loadingEl.classList.remove('hidden'); loadingEl.innerHTML = `<div class="region-loading-spinner">⏳</div><span>${level === 'admin1' ? '전세계 행정구역 로딩 중… (최초 1회 약 40MB)' : '국가 데이터 로딩 중…'}</span>`; }
+
+  try {
+    const geojson = level === 'admin1' ? await loadAdmin1Data() : await loadCountryData();
+    if (!geojson) throw new Error('No data');
+    buildRegionLayer(geojson);
+    if (loadingEl) loadingEl.classList.add('hidden');
+  } catch (err) {
+    console.error('Region data load error:', err);
+    if (loadingEl) loadingEl.innerHTML = '<span style="color:#e74c3c">데이터 로딩 실패. 다시 시도해주세요.</span>';
+  } finally {
+    _regionLoading = false;
+  }
+}
+
+// ── Level toggle (국가별 / 지역별) ──
+document.querySelectorAll('.region-level-btn').forEach(btn => {
+  btn.addEventListener('click', () => {
+    const level = btn.dataset.level;
+    if (level === regionLevel && regionGeoLayer) return;
+    regionLevel = level;
+    document.querySelectorAll('.region-level-btn').forEach(b => b.classList.toggle('active', b === btn));
+    loadRegionData(level);
+    saveState();
+  });
+});
+
+// ── Region search ──
+const regionSearchInput = document.getElementById('region-search-input');
+const regionSearchResults = document.getElementById('region-search-results');
+let regionSearchTimer = null;
+
+function closeRegionSearch() {
+  regionSearchResults.classList.remove('visible');
+  regionSearchResults.innerHTML = '';
+}
+
+function doRegionSearch(q) {
+  // 한국어 입력이면 영문으로 변환해서도 매칭
+  const qLower = q.toLowerCase();
+  const mapped = KO_NAME_MAP[q] || KO_NAME_MAP[qLower];
+  const qEn = mapped ? mapped.toLowerCase() : null;
+
+  const matches = _regionFeatureIndex
+    .filter(f => {
+      const n = f.name.toLowerCase();
+      const a = f.admin.toLowerCase();
+      const alt = f.alt.toLowerCase();
+      if (n.includes(qLower) || a.includes(qLower) || alt.includes(qLower)) return true;
+      if (qEn && (n.includes(qEn) || a.includes(qEn))) return true;
+      return false;
+    })
+    .slice(0, 20);
+  return matches;
+}
+
+function selectRegionResult(name, layer) {
+  if (regionColor === null) {
+    delete paintedRegions[name];
+  } else {
+    paintedRegions[name] = regionColor || '#5B9BD5';
+  }
+  layer.setStyle(regionStyleFor(name));
+  if (layer.getBounds) {
+    try { map.fitBounds(layer.getBounds(), { padding: [60, 60], maxZoom: 8 }); } catch {}
+  }
+  renderRegionList();
+  saveState();
+  regionSearchInput.value = '';
+  closeRegionSearch();
+}
+
+let _lastRegionMatches = [];
+
+regionSearchInput?.addEventListener('input', () => {
+  clearTimeout(regionSearchTimer);
+  const q = regionSearchInput.value.trim();
+  if (q.length < 1) { closeRegionSearch(); _lastRegionMatches = []; return; }
+  regionSearchTimer = setTimeout(() => {
+    const matches = doRegionSearch(q);
+    _lastRegionMatches = matches;
+
+    regionSearchResults.innerHTML = '';
+    if (!matches.length) {
+      regionSearchResults.innerHTML = '<div class="region-search-item" style="color:#bbb;cursor:default">검색 결과 없음</div>';
+    } else {
+      matches.forEach(({ name, admin, layer }) => {
+        const koLabel = (KO_REVERSE_MAP[name.toLowerCase()] || [])[0];
+        const el = document.createElement('div');
+        el.className = 'region-search-item';
+        el.innerHTML = `<strong>${escapeHtml(name)}</strong>${koLabel ? ` <span style="color:#999">(${escapeHtml(koLabel)})</span>` : ''}${admin ? `<br><span class="region-search-sub">${escapeHtml(admin)}</span>` : ''}`;
+        el.addEventListener('click', () => selectRegionResult(name, layer));
+        regionSearchResults.appendChild(el);
+      });
+    }
+    regionSearchResults.classList.add('visible');
+  }, 150);
+});
+
+regionSearchInput?.addEventListener('keydown', (e) => {
+  if (e.key === 'Escape') closeRegionSearch();
+  if (e.key === 'Enter') {
+    e.preventDefault();
+    // 결과가 이미 있으면 첫 번째 선택, 없으면 즉시 검색 후 선택
+    if (_lastRegionMatches.length > 0) {
+      const { name, layer } = _lastRegionMatches[0];
+      selectRegionResult(name, layer);
+    } else {
+      const q = regionSearchInput.value.trim();
+      if (q.length >= 1) {
+        const matches = doRegionSearch(q);
+        if (matches.length > 0) {
+          const { name, layer } = matches[0];
+          selectRegionResult(name, layer);
+        }
+      }
+    }
+  }
+});
+
+document.addEventListener('click', (e) => {
+  if (!e.target.closest('#region-search-section')) closeRegionSearch();
+});
+
+// Sidebar tab switching
+document.querySelectorAll('.sidebar-tab').forEach(tab => {
+  tab.addEventListener('click', () => {
+    document.querySelectorAll('.sidebar-tab').forEach(t => t.classList.remove('active'));
+    tab.classList.add('active');
+    const panel = tab.dataset.panel;
+    document.getElementById('course-panel').style.display = panel === 'course' ? '' : 'none';
+    document.getElementById('region-panel').style.display = panel === 'region' ? '' : 'none';
+    regionMode = (panel === 'region');
+    if (regionMode) {
+      // 색칠 모드: 타일 숨기고 바다색 배경, GeoJSON이 땅을 채움
+      if (map.hasLayer(tileLayer)) map.removeLayer(tileLayer);
+      document.getElementById('map').style.background = '#C5DDE8';
+      if (!regionGeoLayer) loadRegionData(regionLevel);
+      else updateRegionStyles(); // 스타일 갱신 (땅 표시)
+      if (showRegions && !map.hasLayer(regionLayer)) regionLayer.addTo(map);
+      renderRegionPalette(); renderRegionList();
+    } else {
+      // 코스 모드: 타일 복원
+      if (!map.hasLayer(tileLayer)) tileLayer.addTo(map);
+      document.getElementById('map').style.background = '';
+      updateRegionStyles(); // 투명 스타일로 복원
+      if (map.hasLayer(regionLayer)) map.removeLayer(regionLayer);
+    }
+  });
+});
+
+// Region toggle (bottom bar)
+document.getElementById('region-toggle')?.addEventListener('click', () => {
+  showRegions = !showRegions;
+  document.getElementById('region-toggle').classList.toggle('active', showRegions);
+  if (showRegions && !map.hasLayer(regionLayer)) regionLayer.addTo(map);
+  if (!showRegions && map.hasLayer(regionLayer)) map.removeLayer(regionLayer);
+  saveState();
+});
+
+// Extend saveState for region data
+const _origSaveState = saveState;
+saveState = function() {
+  if (!appReady) return;
+  try {
+    localStorage.setItem(STORAGE_KEY, JSON.stringify({
+      waypoints, transportModes, showBadge, showPhoto, showCourse, markerScale, isLoop, loopTransportMode, visibleModes,
+      paintedRegions, showRegions, regionColor, regionLevel,
+      mapStyleSea, mapStyleLand, mapStyleBorder, markerStyle,
+    }));
+  } catch (e) {
+    const slim = waypoints.map(wp => ({ ...wp, imgUrl: wp.imgUrl?.startsWith('data:') ? null : wp.imgUrl }));
+    localStorage.setItem(STORAGE_KEY, JSON.stringify({
+      waypoints: slim, transportModes, showBadge, showPhoto, showCourse, markerScale, isLoop, loopTransportMode, visibleModes,
+      paintedRegions, showRegions, regionColor, regionLevel,
+      mapStyleSea, mapStyleLand, mapStyleBorder, markerStyle,
+    }));
+  }
+};
+
+// Extend loadState for region data
+const _origLoadState = loadState;
+loadState = function() {
+  _origLoadState();
+  try {
+    const raw = localStorage.getItem(STORAGE_KEY);
+    if (!raw) return;
+    const state = JSON.parse(raw);
+    if (state.paintedRegions) paintedRegions = state.paintedRegions;
+    if (state.showRegions !== undefined) showRegions = state.showRegions;
+    if (state.regionColor !== undefined) regionColor = state.regionColor;
+    if (state.regionLevel) regionLevel = state.regionLevel;
+    if (state.mapStyleSea) mapStyleSea = state.mapStyleSea;
+    if (state.mapStyleLand) mapStyleLand = state.mapStyleLand;
+    if (state.mapStyleBorder !== undefined) mapStyleBorder = state.mapStyleBorder;
+    if (state.markerStyle) markerStyle = state.markerStyle;
+    document.getElementById('map').style.background = mapStyleSea;
+    document.getElementById('region-toggle')?.classList.toggle('active', showRegions);
+    document.querySelectorAll('.region-level-btn').forEach(b =>
+      b.classList.toggle('active', b.dataset.level === regionLevel)
+    );
+    if (!showRegions && map.hasLayer(regionLayer)) map.removeLayer(regionLayer);
+    if (Object.keys(paintedRegions).length > 0 && !regionGeoLayer) {
+      loadRegionData(regionLevel);
+    }
+  } catch { /* ignore */ }
+};
+
+// Extend clear button to also clear regions
+(function() {
+  const btn = document.getElementById('clear-btn');
+  if (!btn) return;
+  const newBtn = btn.cloneNode(true);
+  btn.parentNode.replaceChild(newBtn, btn);
+  newBtn.addEventListener('click', () => {
+    if (waypoints.length === 0 && Object.keys(paintedRegions).length === 0) return;
+    if (!confirm('모든 코스와 색칠을 초기화할까요?')) return;
+    waypoints = []; transportModes = []; isLoop = false; loopTransportMode = 'bus';
+    paintedRegions = {};
+    updateRegionStyles();
+    renderRegionList();
+    localStorage.removeItem(STORAGE_KEY);
+    render();
+    map.fitBounds([[-75, -165], [75, 165]]);
+  });
+})();
+
+renderRegionPalette();
+renderRegionList();
+
+// ── Map Style Settings ──
+function applyMapSeaColor() {
+  document.getElementById('map').style.background = mapStyleSea;
+}
+applyMapSeaColor();
+
+(function() {
+  const overlay = document.getElementById('map-style-overlay');
+  const seaInput = document.getElementById('map-style-sea');
+  const landInput = document.getElementById('map-style-land');
+  const borderInput = document.getElementById('map-style-border');
+  const borderVal = document.getElementById('map-style-border-val');
+  const markerToggles = overlay?.querySelectorAll('.map-style-toggle[data-marker]');
+  let pendingMarkerStyle = markerStyle;
+  if (!overlay) return;
+
+  borderInput.addEventListener('input', () => {
+    borderVal.textContent = borderInput.value;
+  });
+
+  markerToggles.forEach(btn => {
+    btn.addEventListener('click', () => {
+      markerToggles.forEach(b => b.classList.remove('active'));
+      btn.classList.add('active');
+      pendingMarkerStyle = btn.dataset.marker;
+    });
+  });
+
+  document.getElementById('map-style-btn').addEventListener('click', () => {
+    seaInput.value = mapStyleSea;
+    landInput.value = mapStyleLand;
+    borderInput.value = mapStyleBorder;
+    borderVal.textContent = mapStyleBorder;
+    pendingMarkerStyle = markerStyle;
+    markerToggles.forEach(b => b.classList.toggle('active', b.dataset.marker === markerStyle));
+    overlay.classList.add('visible');
+  });
+
+  document.getElementById('map-style-close').addEventListener('click', () => {
+    overlay.classList.remove('visible');
+  });
+  overlay.addEventListener('click', e => {
+    if (e.target === overlay) overlay.classList.remove('visible');
+  });
+
+  document.getElementById('map-style-reset').addEventListener('click', () => {
+    seaInput.value = '#BEE8FF';
+    landInput.value = '#E8EAED';
+    borderInput.value = 0.6;
+    borderVal.textContent = '0.6';
+    pendingMarkerStyle = 'pill';
+    markerToggles.forEach(b => b.classList.toggle('active', b.dataset.marker === 'pill'));
+  });
+
+  document.getElementById('map-style-apply').addEventListener('click', () => {
+    mapStyleSea = seaInput.value;
+    mapStyleLand = landInput.value;
+    mapStyleBorder = parseFloat(borderInput.value);
+    markerStyle = pendingMarkerStyle;
+    applyMapSeaColor();
+    updateRegionStyles();
+    renderMarkers();
+    overlay.classList.remove('visible');
+    saveState();
+  });
+})();
 
 // ─── Init ────────────────────────────────────────────────────
 render();
