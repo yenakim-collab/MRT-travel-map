@@ -2292,8 +2292,8 @@ async function loadCountryData() {
 async function loadAdmin1Data() {
   if (_admin1Data) return _admin1Data;
   const urls = [
+    'ne_50m_admin1.json',
     'https://raw.githubusercontent.com/nvkelso/natural-earth-vector/master/geojson/ne_50m_admin_1_states_provinces.geojson',
-    'https://raw.githubusercontent.com/nvkelso/natural-earth-vector/master/geojson/ne_10m_admin_1_states_provinces.geojson',
   ];
   for (const url of urls) {
     try {
