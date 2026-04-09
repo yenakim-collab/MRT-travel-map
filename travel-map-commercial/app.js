@@ -1235,7 +1235,7 @@ function addWaypoint(name, lat, lng, wikiName = null) {
   if (waypoints.length > 1) transportModes.push('bus');
   searchInput.value = '';
   closeResults();
-  regionMode ? renderNoFit() : render();
+  if (regionMode) { renderNoFit(); renderPinList(); } else { render(); }
   if (showPhoto) {
     const idx = waypoints.length - 1;
     fetchLocationImage(waypoints[idx].wikiName, waypoints[idx].lat, waypoints[idx].lng).then((url) => {
@@ -2225,6 +2225,37 @@ function renderRegionList() {
   });
 }
 
+// ── 핀 목록 (색칠 탭에서 waypoint 삭제용) ──
+function renderPinList() {
+  const section = document.getElementById('pin-list-section');
+  const list = document.getElementById('pin-list');
+  const countEl = document.getElementById('pin-count');
+  if (!section || !list || !countEl) return;
+  if (waypoints.length === 0) {
+    section.style.display = 'none';
+    return;
+  }
+  section.style.display = '';
+  countEl.textContent = waypoints.length;
+  list.innerHTML = '';
+  waypoints.forEach((wp, i) => {
+    const item = document.createElement('div');
+    item.className = 'region-item';
+    item.innerHTML = `<div class="region-item-dot" style="background:#E85D26"></div><span class="region-item-name">${escapeHtml(wp.name)}</span><button class="region-item-remove" data-pin-idx="${i}">✕</button>`;
+    list.appendChild(item);
+  });
+  list.querySelectorAll('.region-item-remove').forEach(btn => {
+    btn.addEventListener('click', () => {
+      const idx = parseInt(btn.dataset.pinIdx);
+      waypoints.splice(idx, 1);
+      if (idx < transportModes.length) transportModes.splice(idx, 1);
+      else if (transportModes.length > 0) transportModes.splice(transportModes.length - 1, 1);
+      renderNoFit();
+      renderPinList();
+    });
+  });
+}
+
 // ── Style helpers ──
 function regionStyleFor(name) {
   const color = paintedRegions[name];
@@ -2558,7 +2589,7 @@ document.querySelectorAll('.sidebar-tab').forEach(tab => {
       if (!regionGeoLayer) loadRegionData(regionLevel);
       else updateRegionStyles(); // 스타일 갱신 (땅 표시)
       if (showRegions && !map.hasLayer(regionLayer)) regionLayer.addTo(map);
-      renderRegionPalette(); renderRegionList();
+      renderRegionPalette(); renderRegionList(); renderPinList();
     } else {
       // 코스 모드: 타일 복원
       if (!map.hasLayer(tileLayer)) tileLayer.addTo(map);
@@ -2650,6 +2681,7 @@ loadState = function() {
 
 renderRegionPalette();
 renderRegionList();
+renderPinList();
 
 // ── Map Style Settings ──
 function applyMapSeaColor() {
