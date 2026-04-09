@@ -2076,30 +2076,56 @@ function renderRegionPalette() {
   window.addEventListener('mouseup', () => { draggingHue = false; });
   window.addEventListener('touchend', () => { draggingHue = false; });
 
-  // Open
-  document.getElementById('region-custom-btn')?.addEventListener('click', () => {
-    pickerH = 200; pickerS = 0.7; pickerV = 0.9;
+  // ── Reusable picker open/close ──
+  let _pickerCallback = null; // function(hexColor) called on select
+
+  function openColorPicker(initialHex, callback) {
+    _pickerCallback = callback;
+    // hex → HSV
+    const r = parseInt(initialHex.slice(1, 3), 16) / 255;
+    const g = parseInt(initialHex.slice(3, 5), 16) / 255;
+    const b = parseInt(initialHex.slice(5, 7), 16) / 255;
+    const max = Math.max(r, g, b), min = Math.min(r, g, b), d = max - min;
+    pickerV = max;
+    pickerS = max === 0 ? 0 : d / max;
+    if (d === 0) pickerH = 0;
+    else if (max === r) pickerH = 60 * (((g - b) / d) % 6);
+    else if (max === g) pickerH = 60 * ((b - r) / d + 2);
+    else pickerH = 60 * ((r - g) / d + 4);
+    if (pickerH < 0) pickerH += 360;
     redraw();
     overlay.classList.add('visible');
+  }
+
+  // Open for palette custom color
+  document.getElementById('region-custom-btn')?.addEventListener('click', () => {
+    openColorPicker('#4DA6E8', (c) => {
+      if (!regionPalette.includes(c)) regionPalette.push(c);
+      regionColor = c;
+      renderRegionPalette();
+      saveState();
+    });
   });
 
   // Close
   document.getElementById('color-picker-close')?.addEventListener('click', () => {
     overlay.classList.remove('visible');
+    _pickerCallback = null;
   });
   overlay.addEventListener('click', e => {
-    if (e.target === overlay) overlay.classList.remove('visible');
+    if (e.target === overlay) { overlay.classList.remove('visible'); _pickerCallback = null; }
   });
 
   // Select
   document.getElementById('color-picker-select')?.addEventListener('click', () => {
     const c = hsvToHex(pickerH, pickerS, pickerV);
-    if (!regionPalette.includes(c)) regionPalette.push(c);
-    regionColor = c;
-    renderRegionPalette();
     overlay.classList.remove('visible');
-    saveState();
+    if (_pickerCallback) { _pickerCallback(c); _pickerCallback = null; }
   });
+
+  // ── Map style swatch openers ──
+  // Expose openColorPicker globally for map style modal
+  window._openColorPicker = openColorPicker;
 })();
 
 // ── Region list UI ──
@@ -2265,10 +2291,19 @@ async function loadCountryData() {
 
 async function loadAdmin1Data() {
   if (_admin1Data) return _admin1Data;
-  const data = await fetch('https://raw.githubusercontent.com/nvkelso/natural-earth-vector/master/geojson/ne_10m_admin_1_states_provinces.geojson')
-    .then(r => { if (!r.ok) throw new Error(); return r.json(); });
-  _admin1Data = data;
-  return _admin1Data;
+  const urls = [
+    'https://raw.githubusercontent.com/nvkelso/natural-earth-vector/master/geojson/ne_10m_admin_1_states_provinces.geojson',
+    'https://cdn.jsdelivr.net/gh/nvkelso/natural-earth-vector@master/geojson/ne_10m_admin_1_states_provinces.geojson',
+  ];
+  for (const url of urls) {
+    try {
+      const r = await fetch(url, { signal: AbortSignal.timeout(60000) });
+      if (!r.ok) continue;
+      _admin1Data = await r.json();
+      return _admin1Data;
+    } catch { /* try next */ }
+  }
+  return null;
 }
 
 async function loadRegionData(level) {
@@ -2284,7 +2319,10 @@ async function loadRegionData(level) {
     if (loadingEl) loadingEl.classList.add('hidden');
   } catch (err) {
     console.error('Region data load error:', err);
-    if (loadingEl) loadingEl.innerHTML = '<span style="color:#e74c3c">데이터 로딩 실패. 다시 시도해주세요.</span>';
+    if (loadingEl) loadingEl.innerHTML = '<span style="color:#e74c3c">데이터 로딩 실패.</span> <button id="region-retry-btn" style="color:#e74c3c;text-decoration:underline;background:none;border:none;cursor:pointer;font:inherit">다시 시도</button>';
+    document.getElementById('region-retry-btn')?.addEventListener('click', () => {
+      loadRegionData(level);
+    });
   } finally {
     _regionLoading = false;
   }
@@ -2420,7 +2458,9 @@ document.querySelectorAll('.sidebar-tab').forEach(tab => {
     if (regionMode) {
       // 색칠 모드: 타일 숨기고 바다색 배경, GeoJSON이 땅을 채움
       if (map.hasLayer(tileLayer)) map.removeLayer(tileLayer);
-      document.getElementById('map').style.background = '#C5DDE8';
+      document.getElementById('map').style.background = mapStyleSea;
+      const _rl = document.getElementById('region-loading');
+      if (_rl) _rl.classList.add('hidden');
       if (!regionGeoLayer) loadRegionData(regionLevel);
       else updateRegionStyles(); // 스타일 갱신 (땅 표시)
       if (showRegions && !map.hasLayer(regionLayer)) regionLayer.addTo(map);
@@ -2525,13 +2565,20 @@ applyMapSeaColor();
 
 (function() {
   const overlay = document.getElementById('map-style-overlay');
-  const seaInput = document.getElementById('map-style-sea');
-  const landInput = document.getElementById('map-style-land');
+  const seaSwatch = document.getElementById('map-style-sea');
+  const landSwatch = document.getElementById('map-style-land');
   const borderInput = document.getElementById('map-style-border');
   const borderVal = document.getElementById('map-style-border-val');
   const markerToggles = overlay?.querySelectorAll('.map-style-toggle[data-marker]');
   let pendingMarkerStyle = markerStyle;
+  let pendingSea = mapStyleSea;
+  let pendingLand = mapStyleLand;
   if (!overlay) return;
+
+  function updateSwatches() {
+    seaSwatch.style.background = pendingSea;
+    landSwatch.style.background = pendingLand;
+  }
 
   borderInput.addEventListener('input', () => {
     borderVal.textContent = borderInput.value;
@@ -2545,9 +2592,26 @@ applyMapSeaColor();
     });
   });
 
+  seaSwatch.addEventListener('click', () => {
+    if (!window._openColorPicker) return;
+    window._openColorPicker(pendingSea, (c) => {
+      pendingSea = c;
+      updateSwatches();
+    });
+  });
+
+  landSwatch.addEventListener('click', () => {
+    if (!window._openColorPicker) return;
+    window._openColorPicker(pendingLand, (c) => {
+      pendingLand = c;
+      updateSwatches();
+    });
+  });
+
   document.getElementById('map-style-btn').addEventListener('click', () => {
-    seaInput.value = mapStyleSea;
-    landInput.value = mapStyleLand;
+    pendingSea = mapStyleSea;
+    pendingLand = mapStyleLand;
+    updateSwatches();
     borderInput.value = mapStyleBorder;
     borderVal.textContent = mapStyleBorder;
     pendingMarkerStyle = markerStyle;
@@ -2563,8 +2627,9 @@ applyMapSeaColor();
   });
 
   document.getElementById('map-style-reset').addEventListener('click', () => {
-    seaInput.value = '#BEE8FF';
-    landInput.value = '#E8EAED';
+    pendingSea = '#BEE8FF';
+    pendingLand = '#E8EAED';
+    updateSwatches();
     borderInput.value = 0.6;
     borderVal.textContent = '0.6';
     pendingMarkerStyle = 'pill';
@@ -2572,8 +2637,8 @@ applyMapSeaColor();
   });
 
   document.getElementById('map-style-apply').addEventListener('click', () => {
-    mapStyleSea = seaInput.value;
-    mapStyleLand = landInput.value;
+    mapStyleSea = pendingSea;
+    mapStyleLand = pendingLand;
     mapStyleBorder = parseFloat(borderInput.value);
     markerStyle = pendingMarkerStyle;
     document.querySelectorAll('.marker-style-btn').forEach(b =>

@@ -381,14 +381,16 @@ h1 {
   color: #444;
   white-space: nowrap;
 }
-.map-style-row input[type="color"] {
+.map-style-swatch {
   width: 36px;
   height: 28px;
   border: 1.5px solid #ddd;
   border-radius: 6px;
-  padding: 1px;
   cursor: pointer;
-  background: none;
+  transition: border-color 0.15s;
+}
+.map-style-swatch:hover {
+  border-color: #999;
 }
 
 .map-style-range-wrap {
