@@ -2307,8 +2307,9 @@ async function loadAdmin1Data() {
   return null;
 }
 
+let _regionLoadId = 0; // 동시 호출 충돌 방지용
 async function loadRegionData(level) {
-  if (_regionLoading) return;
+  const myId = ++_regionLoadId;
   _regionLoading = true;
   const loadingEl = document.getElementById('region-loading');
   if (regionMode && loadingEl) {
@@ -2318,12 +2319,14 @@ async function loadRegionData(level) {
 
   try {
     const geojson = level === 'admin1' ? await loadAdmin1Data() : await loadCountryData();
+    if (myId !== _regionLoadId) return; // 새 호출이 시작됐으면 무시
     if (!geojson) throw new Error('No data');
     buildRegionLayer(geojson);
-    if (loadingEl) loadingEl.classList.add('hidden');
+    if (loadingEl) { loadingEl.classList.add('hidden'); loadingEl.innerHTML = ''; }
   } catch (err) {
+    if (myId !== _regionLoadId) return; // 새 호출이 시작됐으면 무시
     console.error('Region data load error:', err);
-    if (regionMode && loadingEl) {
+    if (regionMode && !regionGeoLayer && loadingEl) {
       loadingEl.classList.remove('hidden');
       loadingEl.innerHTML = '<span style="color:#e74c3c">데이터 로딩 실패.</span> <button id="region-retry-btn" style="color:#e74c3c;text-decoration:underline;background:none;border:none;cursor:pointer;font:inherit">다시 시도</button>';
       document.getElementById('region-retry-btn')?.addEventListener('click', () => {
@@ -2331,7 +2334,7 @@ async function loadRegionData(level) {
       });
     }
   } finally {
-    _regionLoading = false;
+    if (myId === _regionLoadId) _regionLoading = false;
   }
 }
 
