@@ -2299,34 +2299,17 @@ async function loadAdmin1Data() {
   } catch { return null; }
 }
 
-let _regionLoadId = 0; // 동시 호출 충돌 방지용
 async function loadRegionData(level) {
-  const myId = ++_regionLoadId;
+  if (_regionLoading) return;
   _regionLoading = true;
-  const loadingEl = document.getElementById('region-loading');
-  if (regionMode && loadingEl) {
-    loadingEl.classList.remove('hidden');
-    loadingEl.innerHTML = `<div class="region-loading-spinner">⏳</div><span>${level === 'admin1' ? '전세계 행정구역 로딩 중…' : '국가 데이터 로딩 중…'}</span>`;
-  }
-
   try {
     const geojson = level === 'admin1' ? await loadAdmin1Data() : await loadCountryData();
-    if (myId !== _regionLoadId) return; // 새 호출이 시작됐으면 무시
-    if (!geojson) throw new Error('No data');
+    if (!geojson) return;
     buildRegionLayer(geojson);
-    if (loadingEl) { loadingEl.classList.add('hidden'); loadingEl.innerHTML = ''; }
   } catch (err) {
-    if (myId !== _regionLoadId) return; // 새 호출이 시작됐으면 무시
     console.error('Region data load error:', err);
-    if (regionMode && !regionGeoLayer && loadingEl) {
-      loadingEl.classList.remove('hidden');
-      loadingEl.innerHTML = '<span style="color:#e74c3c">데이터 로딩 실패.</span> <button id="region-retry-btn" style="color:#e74c3c;text-decoration:underline;background:none;border:none;cursor:pointer;font:inherit">다시 시도</button>';
-      document.getElementById('region-retry-btn')?.addEventListener('click', () => {
-        loadRegionData(level);
-      });
-    }
   } finally {
-    if (myId === _regionLoadId) _regionLoading = false;
+    _regionLoading = false;
   }
 }
 
@@ -2337,8 +2320,6 @@ document.querySelectorAll('.region-level-btn').forEach(btn => {
     if (level === regionLevel && regionGeoLayer) return;
     regionLevel = level;
     document.querySelectorAll('.region-level-btn').forEach(b => b.classList.toggle('active', b === btn));
-    const _rl2 = document.getElementById('region-loading');
-    if (_rl2) { _rl2.classList.add('hidden'); _rl2.innerHTML = ''; }
     _regionLoading = false;
     loadRegionData(level);
     saveState();
@@ -2464,8 +2445,6 @@ document.querySelectorAll('.sidebar-tab').forEach(tab => {
       // 색칠 모드: 타일 숨기고 바다색 배경, GeoJSON이 땅을 채움
       if (map.hasLayer(tileLayer)) map.removeLayer(tileLayer);
       document.getElementById('map').style.background = mapStyleSea;
-      const _rl = document.getElementById('region-loading');
-      if (_rl) { _rl.classList.add('hidden'); _rl.innerHTML = ''; }
       _regionLoading = false; // 이전 실패 잠금 해제
       if (!regionGeoLayer) loadRegionData(regionLevel);
       else updateRegionStyles(); // 스타일 갱신 (땅 표시)
