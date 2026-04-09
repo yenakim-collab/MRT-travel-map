@@ -2204,8 +2204,8 @@ const regionTooltip = document.getElementById('region-tooltip');
 function buildRegionLayer(geojson) {
   if (regionGeoLayer) { regionLayer.removeLayer(regionGeoLayer); }
   _regionFeatureIndex = [];
-  const fixed = fixAntimeridian(geojson);
-  regionGeoLayer = L.geoJSON(fixed, {
+  const data = regionLevel === 'admin1' ? geojson : fixAntimeridian(geojson);
+  regionGeoLayer = L.geoJSON(data, {
     renderer: canvasRenderer,
     style: feature => regionStyleFor(regionName(feature)),
     onEachFeature: (feature, layer) => {
