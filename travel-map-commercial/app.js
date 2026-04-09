@@ -1454,7 +1454,10 @@ map.on('click', (e) => {
       if (!name) { input.focus(); return; }
       _pinAdded = true;
       addWaypoint(name, lat, lng, name);
-      exitPinMode();
+      // 핀 모드 유지 — 팝업만 닫기
+      map.closePopup();
+      if (pinMarker && map.hasLayer(pinMarker)) map.removeLayer(pinMarker);
+      pinMarker = null;
     };
 
     confirmBtn.addEventListener('click', confirmAdd);
@@ -1462,7 +1465,12 @@ map.on('click', (e) => {
       if (ev.key === 'Enter') { ev.preventDefault(); confirmAdd(); }
       if (ev.key === 'Escape') { ev.stopPropagation(); exitPinMode(); }
     });
-    cancelBtn.addEventListener('click', () => exitPinMode());
+    cancelBtn.addEventListener('click', () => {
+      map.closePopup();
+      if (pinMarker && map.hasLayer(pinMarker)) map.removeLayer(pinMarker);
+      pinMarker = null;
+      // 취소해도 핀 모드 유지
+    });
   }, 50);
 });
 
