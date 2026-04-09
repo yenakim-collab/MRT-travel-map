@@ -2310,7 +2310,10 @@ async function loadRegionData(level) {
   if (_regionLoading) return;
   _regionLoading = true;
   const loadingEl = document.getElementById('region-loading');
-  if (loadingEl) { loadingEl.classList.remove('hidden'); loadingEl.innerHTML = `<div class="region-loading-spinner">⏳</div><span>${level === 'admin1' ? '전세계 행정구역 로딩 중…' : '국가 데이터 로딩 중…'}</span>`; }
+  if (regionMode && loadingEl) {
+    loadingEl.classList.remove('hidden');
+    loadingEl.innerHTML = `<div class="region-loading-spinner">⏳</div><span>${level === 'admin1' ? '전세계 행정구역 로딩 중…' : '국가 데이터 로딩 중…'}</span>`;
+  }
 
   try {
     const geojson = level === 'admin1' ? await loadAdmin1Data() : await loadCountryData();
@@ -2319,10 +2322,13 @@ async function loadRegionData(level) {
     if (loadingEl) loadingEl.classList.add('hidden');
   } catch (err) {
     console.error('Region data load error:', err);
-    if (loadingEl) loadingEl.innerHTML = '<span style="color:#e74c3c">데이터 로딩 실패.</span> <button id="region-retry-btn" style="color:#e74c3c;text-decoration:underline;background:none;border:none;cursor:pointer;font:inherit">다시 시도</button>';
-    document.getElementById('region-retry-btn')?.addEventListener('click', () => {
-      loadRegionData(level);
-    });
+    if (regionMode && loadingEl) {
+      loadingEl.classList.remove('hidden');
+      loadingEl.innerHTML = '<span style="color:#e74c3c">데이터 로딩 실패.</span> <button id="region-retry-btn" style="color:#e74c3c;text-decoration:underline;background:none;border:none;cursor:pointer;font:inherit">다시 시도</button>';
+      document.getElementById('region-retry-btn')?.addEventListener('click', () => {
+        loadRegionData(level);
+      });
+    }
   } finally {
     _regionLoading = false;
   }
@@ -2461,6 +2467,7 @@ document.querySelectorAll('.sidebar-tab').forEach(tab => {
       document.getElementById('map').style.background = mapStyleSea;
       const _rl = document.getElementById('region-loading');
       if (_rl) _rl.classList.add('hidden');
+      _regionLoading = false; // 이전 실패 잠금 해제
       if (!regionGeoLayer) loadRegionData(regionLevel);
       else updateRegionStyles(); // 스타일 갱신 (땅 표시)
       if (showRegions && !map.hasLayer(regionLayer)) regionLayer.addTo(map);
