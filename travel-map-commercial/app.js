@@ -1235,7 +1235,7 @@ function addWaypoint(name, lat, lng, wikiName = null) {
   if (waypoints.length > 1) transportModes.push('bus');
   searchInput.value = '';
   closeResults();
-  render();
+  regionMode ? renderNoFit() : render();
   if (showPhoto) {
     const idx = waypoints.length - 1;
     fetchLocationImage(waypoints[idx].wikiName, waypoints[idx].lat, waypoints[idx].lng).then((url) => {
