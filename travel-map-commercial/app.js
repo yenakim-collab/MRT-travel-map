@@ -1137,12 +1137,29 @@ async function doSearch(query) {
   const normalized = normalizeQuery(query);
   searchSpinner.classList.remove('hidden');
   try {
+    // 0단계: 한글이면 KO_NAME_MAP으로 영문 변환 시도
+    let koMapped = null;
+    if (hasNonLatin(normalized)) {
+      const qLower = normalized.toLowerCase();
+      koMapped = KO_NAME_MAP[normalized] || KO_NAME_MAP[qLower];
+      if (!koMapped) {
+        for (const [ko, en] of Object.entries(KO_NAME_MAP)) {
+          if (ko === qLower || qLower.includes(ko) || ko.includes(qLower)) { koMapped = en; break; }
+        }
+      }
+    }
+
     // 1차: 정규화된 쿼리로 Nominatim 검색
     let results = await nominatimSearch(normalized);
 
+    // 1.5차: 한글→영문 매핑 있으면 영문으로도 검색
+    if (results.length === 0 && koMapped) {
+      results = await nominatimSearch(koMapped);
+    }
+
     // 2차: 결과 없고 비라틴 문자(한글 등) → Photon fallback
     if (results.length === 0 && hasNonLatin(normalized)) {
-      results = await photonSearch(normalized);
+      results = await photonSearch(koMapped || normalized);
     }
 
     // 3차: 여전히 없고 원본과 정규화 쿼리가 다르면 → 원본으로 한번 더
@@ -1881,8 +1898,51 @@ const KO_NAME_MAP = {
   '경북':'Gyeongsangbuk','경남':'Gyeongsangnam','제주':'Jeju',
   // 중국 지역
   '베이징':'Beijing','상하이':'Shanghai','광저우':'Guangdong','홍콩':'Hong Kong','마카오':'Macau',
-  // 미국 지역
+  // 미국 지역/도시
   '뉴욕':'New York','캘리포니아':'California','하와이':'Hawaii','텍사스':'Texas','플로리다':'Florida',
+  '콜로라도':'Colorado','라스베가스':'Las Vegas','로스앤젤레스':'Los Angeles','엘에이':'Los Angeles',
+  '샌프란시스코':'San Francisco','시카고':'Chicago','워싱턴':'Washington','보스턴':'Boston',
+  '시애틀':'Seattle','마이애미':'Miami','필라델피아':'Philadelphia','애틀랜타':'Atlanta',
+  '디트로이트':'Detroit','덴버':'Denver','휴스턴':'Houston','달라스':'Dallas','피닉스':'Phoenix',
+  '포틀랜드':'Portland','미네소타':'Minnesota','매사추세츠':'Massachusetts','일리노이':'Illinois',
+  '오하이오':'Ohio','미시간':'Michigan','조지아주':'Georgia','펜실베이니아':'Pennsylvania',
+  '오레곤':'Oregon','알래스카':'Alaska','유타':'Utah','아이다호':'Idaho','몬타나':'Montana',
+  '와이오밍':'Wyoming','네바다':'Nevada','아리조나':'Arizona','뉴멕시코':'New Mexico',
+  // 캐나다 지역/도시
+  '퀘백':'Quebec','퀘벡':'Quebec','알버타':'Alberta','앨버타':'Alberta',
+  '밴쿠버':'Vancouver','토론토':'Toronto','몬트리올':'Montreal','오타와':'Ottawa',
+  '캘거리':'Calgary','에드먼턴':'Edmonton','위니펙':'Winnipeg','핼리팩스':'Halifax',
+  '빅토리아':'Victoria','서스캐처원':'Saskatchewan','매니토바':'Manitoba',
+  '온타리오':'Ontario','브리티시컬럼비아':'British Columbia','유콘':'Yukon',
+  '노바스코샤':'Nova Scotia','뉴브런즈윅':'New Brunswick',
+  // 유럽 도시
+  '파리':'Paris','런던':'London','로마':'Rome','마드리드':'Madrid','바르셀로나':'Barcelona',
+  '베를린':'Berlin','뮌헨':'Munich','프라하':'Prague','부다페스트':'Budapest','빈':'Vienna',
+  '암스테르담':'Amsterdam','브뤼셀':'Brussels','취리히':'Zurich','제네바':'Geneva',
+  '밀라노':'Milan','피렌체':'Florence','베네치아':'Venice','나폴리':'Naples',
+  '리스본':'Lisbon','포르투':'Porto','아테네':'Athens','이스탄불':'Istanbul',
+  '모스크바':'Moscow','상트페테르부르크':'Saint Petersburg','바르샤바':'Warsaw',
+  '코펜하겐':'Copenhagen','스톡홀름':'Stockholm','오슬로':'Oslo','헬싱키':'Helsinki',
+  '더블린':'Dublin','에든버러':'Edinburgh','맨체스터':'Manchester','리버풀':'Liverpool',
+  '뒤셀도르프':'Düsseldorf','함부르크':'Hamburg','프랑크푸르트':'Frankfurt',
+  '크라쿠프':'Krakow','두브로브니크':'Dubrovnik','잘츠부르크':'Salzburg',
+  // 아시아 도시
+  '방콕':'Bangkok','호치민':'Ho Chi Minh City','하노이':'Hanoi','다낭':'Da Nang',
+  '발리':'Bali','자카르타':'Jakarta','쿠알라룸푸르':'Kuala Lumpur','마닐라':'Manila',
+  '세부':'Cebu','보라카이':'Boracay','치앙마이':'Chiang Mai','푸켓':'Phuket',
+  '시엠립':'Siem Reap','양곤':'Yangon','카트만두':'Kathmandu','뉴델리':'New Delhi',
+  '뭄바이':'Mumbai','타이베이':'Taipei','가오슝':'Kaohsiung',
+  '오사카시':'Osaka','나고야시':'Nagoya','요코하마':'Yokohama','고베':'Kobe','센다이':'Sendai',
+  // 호주/뉴질랜드
+  '시드니':'Sydney','멜버른':'Melbourne','브리즈번':'Brisbane','퍼스':'Perth',
+  '골드코스트':'Gold Coast','오클랜드':'Auckland','퀸즈타운':'Queenstown',
+  '크라이스트처치':'Christchurch','웰링턴':'Wellington',
+  // 중남미/아프리카/중동
+  '리우데자네이루':'Rio de Janeiro','상파울루':'São Paulo','부에노스아이레스':'Buenos Aires',
+  '산티아고':'Santiago','리마':'Lima','보고타':'Bogota','아바나':'Havana','칸쿤':'Cancun',
+  '카이로':'Cairo','케이프타운':'Cape Town','나이로비':'Nairobi','마라케시':'Marrakech',
+  '두바이':'Dubai','아부다비':'Abu Dhabi','텔아비브':'Tel Aviv','예루살렘':'Jerusalem',
+  '도하':'Doha','리야드':'Riyadh','무스카트':'Muscat',
 };
 
 // 역매핑 (English→Korean) - 검색 결과에 한글명도 보여주기 위해
