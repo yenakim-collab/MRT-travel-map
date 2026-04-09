@@ -136,14 +136,15 @@
           <span>색칠</span>
         </button>
         <div class="bottom-divider"></div>
-        <div id="scale-control">
-          <svg width="12" height="12" viewBox="0 0 24 24" fill="currentColor" opacity="0.5">
-            <path d="M15 3l2.3 2.3-2.89 2.87 1.42 1.42L18.7 6.7 21 9V3h-6zM3 9l2.3-2.3 2.87 2.89 1.42-1.42L6.7 5.3 9 3H3v6zm6 12l-2.3-2.3 2.89-2.87-1.42-1.42L5.3 17.3 3 15v6h6zm12-6l-2.3 2.3-2.87-2.89-1.42 1.42 2.89 2.87L15 21h6v-6z"/>
-          </svg>
-          <button class="scale-btn" data-scale="0.8">0.8×</button>
-          <button class="scale-btn active" data-scale="1">1×</button>
-          <button class="scale-btn" data-scale="1.5">1.5×</button>
-          <button class="scale-btn" data-scale="2">2×</button>
+        <button id="scale-cycle-btn" title="마커 배율">1×</button>
+        <div class="bottom-divider"></div>
+        <div id="marker-style-control">
+          <button class="marker-style-btn active" data-style="pill" title="기본 스타일">
+            <svg width="24" height="14" viewBox="0 0 24 14"><rect x="0.5" y="0.5" width="23" height="13" rx="7" fill="#fff" stroke="#bbb" stroke-width="1"/><text x="12" y="10.5" text-anchor="middle" font-size="8" font-weight="700" fill="#333" font-family="sans-serif">Ab</text></svg>
+          </button>
+          <button class="marker-style-btn" data-style="bubble" title="말풍선 스타일">
+            <svg width="24" height="18" viewBox="0 0 24 18"><rect x="0.5" y="0.5" width="23" height="13" rx="3" fill="#222" stroke="none"/><polygon points="9,13.5 12,17.5 15,13.5" fill="#222"/><text x="12" y="10.5" text-anchor="middle" font-size="8" font-weight="700" fill="#fff" font-family="sans-serif">Ab</text></svg>
+          </button>
         </div>
       </div>
       <div id="region-tooltip"></div>

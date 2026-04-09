@@ -126,10 +126,9 @@ function loadState() {
     document.getElementById('badge-toggle')?.classList.toggle('active', showBadge);
     document.getElementById('photo-toggle')?.classList.toggle('active', showPhoto);
     document.getElementById('course-toggle')?.classList.toggle('active', showCourse);
-    // 저장된 배율로 버튼 active 상태 복원
-    document.querySelectorAll('.scale-btn').forEach(btn => {
-      btn.classList.toggle('active', parseFloat(btn.dataset.scale) === markerScale);
-    });
+    // 저장된 배율 버튼 복원
+    const _scBtn = document.getElementById('scale-cycle-btn');
+    if (_scBtn) _scBtn.textContent = markerScale + '×';
 
     // 레거시 마이그레이션: 첫/마지막 waypoint 중복 감지 → isLoop으로 변환
     if (!isLoop && waypoints.length >= 3) {
@@ -1252,11 +1251,25 @@ document.getElementById('photo-upload-input').addEventListener('change', (e) => 
   uploadTargetIndex = null;
 });
 
-// ─── Scale control ───────────────────────────────────────────
-document.querySelectorAll('.scale-btn').forEach(btn => {
+// ─── Scale cycle button ──────────────────────────────────────
+const SCALE_STEPS = [1, 1.5, 2, 0.8];
+const scaleCycleBtn = document.getElementById('scale-cycle-btn');
+function updateScaleBtn() {
+  scaleCycleBtn.textContent = markerScale + '×';
+}
+scaleCycleBtn.addEventListener('click', () => {
+  const idx = SCALE_STEPS.indexOf(markerScale);
+  markerScale = SCALE_STEPS[(idx + 1) % SCALE_STEPS.length];
+  updateScaleBtn();
+  renderMarkers();
+  saveState();
+});
+
+// ─── Marker style toggle (bottom bar) ────────────────────────
+document.querySelectorAll('.marker-style-btn').forEach(btn => {
   btn.addEventListener('click', () => {
-    markerScale = parseFloat(btn.dataset.scale);
-    document.querySelectorAll('.scale-btn').forEach(b =>
+    markerStyle = btn.dataset.style;
+    document.querySelectorAll('.marker-style-btn').forEach(b =>
       b.classList.toggle('active', b === btn)
     );
     renderMarkers();
@@ -1651,12 +1664,19 @@ document.getElementById('export-btn').addEventListener('click', async () => {
 
       // ── 공통 pill 드로잉 헬퍼 (markerScale 적용) ──────────────
       const drawPill = (pillCX, pillCY, numStr, nameStr) => {
+        const isBubble = markerStyle === 'bubble';
         const PILL_H = 26 * markerScale;
         const NUM_R  = 10 * markerScale;
-        // 번호 텍스트 폭 측정 → 원 or pill 형태 결정
+        const TAIL_H = 6 * markerScale;
+        const R = isBubble ? 4 * markerScale : PILL_H / 2; // bubble: 작은 radius, pill: 완전 둥근
+        const bgColor = isBubble ? '#222' : '#fff';
+        const textColor = isBubble ? '#fff' : '#111';
+        const numBgColor = isBubble ? '#fff' : '#1a1a1a';
+        const numTextColor = isBubble ? '#222' : '#fff';
+
         ctx.font = `800 ${Math.round(10 * markerScale)}px 'Noto Sans KR', sans-serif`;
         const numTextW = ctx.measureText(numStr).width;
-        const numBadgeW = Math.max(NUM_R * 2, numTextW + 8 * markerScale); // 최소 원형, 필요시 확장
+        const numBadgeW = Math.max(NUM_R * 2, numTextW + 8 * markerScale);
         const numBadgeH = NUM_R * 2;
         ctx.font = `600 ${Math.round(13 * markerScale)}px 'Noto Sans KR', sans-serif`;
         const nameW = ctx.measureText(nameStr).width;
@@ -1665,45 +1685,53 @@ document.getElementById('export-btn').addEventListener('click', async () => {
         const px = pillCX - pillW / 2;
         const py = pillCY - PILL_H / 2;
 
-        // pill 배경 (흰색)
+        // pill 배경
         ctx.save();
-        ctx.shadowColor = 'rgba(0,0,0,0.22)';
+        ctx.shadowColor = isBubble ? 'rgba(0,0,0,0.35)' : 'rgba(0,0,0,0.22)';
         ctx.shadowBlur = 10 * markerScale;
         ctx.shadowOffsetY = 2;
-        drawRoundRect(ctx, px, py, pillW, PILL_H, PILL_H / 2);
-        ctx.fillStyle = '#fff';
+        drawRoundRect(ctx, px, py, pillW, PILL_H, R);
+        ctx.fillStyle = bgColor;
         ctx.fill();
         ctx.restore();
 
-        // pill 테두리 (연한 검정)
-        ctx.strokeStyle = 'rgba(0,0,0,0.14)';
-        ctx.lineWidth = 1.5;
-        drawRoundRect(ctx, px, py, pillW, PILL_H, PILL_H / 2);
-        ctx.stroke();
+        if (isBubble) {
+          // 꼬리 삼각형
+          ctx.beginPath();
+          ctx.moveTo(pillCX - 6 * markerScale, py + PILL_H);
+          ctx.lineTo(pillCX, py + PILL_H + TAIL_H);
+          ctx.lineTo(pillCX + 6 * markerScale, py + PILL_H);
+          ctx.closePath();
+          ctx.fillStyle = bgColor;
+          ctx.fill();
+        } else {
+          // pill 테두리
+          ctx.strokeStyle = 'rgba(0,0,0,0.14)';
+          ctx.lineWidth = 1.5;
+          drawRoundRect(ctx, px, py, pillW, PILL_H, R);
+          ctx.stroke();
+        }
 
         if (showCourse) {
-          // 번호 배지 (검정 배경, 흰 숫자) — 텍스트 폭에 따라 원형 or pill형
           const numCX = px + 4 * markerScale + numBadgeW / 2;
           const numCY = pillCY;
           const numBadgeR = numBadgeH / 2;
           drawRoundRect(ctx, numCX - numBadgeW / 2, numCY - numBadgeR, numBadgeW, numBadgeH, numBadgeR);
-          ctx.fillStyle = '#1a1a1a';
+          ctx.fillStyle = numBgColor;
           ctx.fill();
-          ctx.fillStyle = '#fff';
+          ctx.fillStyle = numTextColor;
           ctx.font = `800 ${Math.round(10 * markerScale)}px 'Noto Sans KR', sans-serif`;
           ctx.textAlign = 'center';
           ctx.textBaseline = 'middle';
           ctx.fillText(numStr, numCX, numCY);
 
-          // 지역명 (검정, 번호 오른쪽)
-          ctx.fillStyle = '#111';
+          ctx.fillStyle = textColor;
           ctx.font = `600 ${Math.round(13 * markerScale)}px 'Noto Sans KR', sans-serif`;
           ctx.textAlign = 'left';
           ctx.textBaseline = 'middle';
           ctx.fillText(nameStr, numCX + numBadgeW / 2 + 5 * markerScale, numCY);
         } else {
-          // 지역명만 (pill 중앙 정렬)
-          ctx.fillStyle = '#111';
+          ctx.fillStyle = textColor;
           ctx.font = `600 ${Math.round(13 * markerScale)}px 'Noto Sans KR', sans-serif`;
           ctx.textAlign = 'center';
           ctx.textBaseline = 'middle';
@@ -1831,6 +1859,18 @@ const KO_NAME_MAP = {
   '이집트':'Egypt','남아프리카':'South Africa','모로코':'Morocco','케냐':'Kenya','에티오피아':'Ethiopia',
   '사우디아라비아':'Saudi Arabia','아랍에미리트':'United Arab Emirates','이란':'Iran','이라크':'Iraq','이스라엘':'Israel',
   '크로아티아':'Croatia','루마니아':'Romania','불가리아':'Bulgaria','세르비아':'Serbia',
+  '쿠바':'Cuba','자메이카':'Jamaica','도미니카':'Dominican Rep.','아이티':'Haiti','파나마':'Panama',
+  '코스타리카':'Costa Rica','과테말라':'Guatemala','온두라스':'Honduras','엘살바도르':'El Salvador','니카라과':'Nicaragua',
+  '에콰도르':'Ecuador','볼리비아':'Bolivia','파라과이':'Paraguay','우루과이':'Uruguay','베네수엘라':'Venezuela','가이아나':'Guyana',
+  '슬로바키아':'Slovakia','슬로베니아':'Slovenia','보스니아':'Bosnia and Herz.','몬테네그로':'Montenegro',
+  '알바니아':'Albania','북마케도니아':'North Macedonia','리투아니아':'Lithuania','라트비아':'Latvia','에스토니아':'Estonia',
+  '룩셈부르크':'Luxembourg','몰타':'Malta','키프로스':'Cyprus','조지아':'Georgia','아르메니아':'Armenia','아제르바이잔':'Azerbaijan',
+  '우즈베키스탄':'Uzbekistan','투르크메니스탄':'Turkmenistan','키르기스스탄':'Kyrgyzstan','타지키스탄':'Tajikistan',
+  '파키스탄':'Pakistan','방글라데시':'Bangladesh','스리랑카':'Sri Lanka','네팔':'Nepal','미얀마':'Myanmar','캄보디아':'Cambodia','라오스':'Laos',
+  '탄자니아':'Tanzania','나이지리아':'Nigeria','가나':'Ghana','세네갈':'Senegal','콩고':'Dem. Rep. Congo',
+  '카메룬':'Cameroon','마다가스카르':'Madagascar','튀니지':'Tunisia','알제리':'Algeria','리비아':'Libya',
+  '요르단':'Jordan','레바논':'Lebanon','오만':'Oman','카타르':'Qatar','쿠웨이트':'Kuwait','바레인':'Bahrain',
+  '피지':'Fiji','파푸아뉴기니':'Papua New Guinea',
   // 일본 지역
   '도쿄':'Tokyo','오사카':'Ōsaka','교토':'Kyōto','홋카이도':'Hokkaidō','후쿠오카':'Fukuoka',
   '오키나와':'Okinawa','나고야':'Aichi','나라':'Nara','히로시마':'Hiroshima','삿포로':'Hokkaidō',
@@ -2160,6 +2200,7 @@ function buildRegionLayer(geojson) {
 
       _regionFeatureIndex.push({ name, admin, layer, alt: altNames.join(' ') });
       layer.on('click', (e) => {
+        if (isPinMode) return; // 핀 모드에서는 지도 클릭으로 통과
         if (!regionMode) return;
         L.DomEvent.stopPropagation(e);
         if (!name) return;
@@ -2274,8 +2315,15 @@ function closeRegionSearch() {
 function doRegionSearch(q) {
   // 한국어 입력이면 영문으로 변환해서도 매칭
   const qLower = q.toLowerCase();
-  const mapped = KO_NAME_MAP[q] || KO_NAME_MAP[qLower];
-  const qEn = mapped ? mapped.toLowerCase() : null;
+  // 정확히 일치 또는 부분 일치하는 한글 키 모두 찾기
+  const mappedEns = [];
+  const exact = KO_NAME_MAP[q] || KO_NAME_MAP[qLower];
+  if (exact) mappedEns.push(exact.toLowerCase());
+  for (const [ko, en] of Object.entries(KO_NAME_MAP)) {
+    if (ko.includes(qLower) && !mappedEns.includes(en.toLowerCase())) {
+      mappedEns.push(en.toLowerCase());
+    }
+  }
 
   const matches = _regionFeatureIndex
     .filter(f => {
@@ -2283,7 +2331,9 @@ function doRegionSearch(q) {
       const a = f.admin.toLowerCase();
       const alt = f.alt.toLowerCase();
       if (n.includes(qLower) || a.includes(qLower) || alt.includes(qLower)) return true;
-      if (qEn && (n.includes(qEn) || a.includes(qEn))) return true;
+      for (const en of mappedEns) {
+        if (n.includes(en) || a.includes(en)) return true;
+      }
       return false;
     })
     .slice(0, 20);
@@ -2430,6 +2480,9 @@ loadState = function() {
     if (state.mapStyleLand) mapStyleLand = state.mapStyleLand;
     if (state.mapStyleBorder !== undefined) mapStyleBorder = state.mapStyleBorder;
     if (state.markerStyle) markerStyle = state.markerStyle;
+    document.querySelectorAll('.marker-style-btn').forEach(b =>
+      b.classList.toggle('active', b.dataset.style === markerStyle)
+    );
     document.getElementById('map').style.background = mapStyleSea;
     document.getElementById('region-toggle')?.classList.toggle('active', showRegions);
     document.querySelectorAll('.region-level-btn').forEach(b =>
@@ -2523,6 +2576,9 @@ applyMapSeaColor();
     mapStyleLand = landInput.value;
     mapStyleBorder = parseFloat(borderInput.value);
     markerStyle = pendingMarkerStyle;
+    document.querySelectorAll('.marker-style-btn').forEach(b =>
+      b.classList.toggle('active', b.dataset.style === markerStyle)
+    );
     applyMapSeaColor();
     updateRegionStyles();
     renderMarkers();
