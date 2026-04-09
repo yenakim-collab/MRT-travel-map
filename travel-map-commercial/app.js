@@ -1445,9 +1445,12 @@ map.on('click', (e) => {
 
     input.focus();
 
+    let _pinAdded = false;
     const confirmAdd = () => {
+      if (_pinAdded) return;
       const name = input.value.trim();
       if (!name) { input.focus(); return; }
+      _pinAdded = true;
       addWaypoint(name, lat, lng, name);
       exitPinMode();
     };
