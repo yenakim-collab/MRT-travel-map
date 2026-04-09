@@ -2292,12 +2292,12 @@ async function loadCountryData() {
 async function loadAdmin1Data() {
   if (_admin1Data) return _admin1Data;
   const urls = [
+    'https://raw.githubusercontent.com/nvkelso/natural-earth-vector/master/geojson/ne_50m_admin_1_states_provinces.geojson',
     'https://raw.githubusercontent.com/nvkelso/natural-earth-vector/master/geojson/ne_10m_admin_1_states_provinces.geojson',
-    'https://cdn.jsdelivr.net/gh/nvkelso/natural-earth-vector@master/geojson/ne_10m_admin_1_states_provinces.geojson',
   ];
   for (const url of urls) {
     try {
-      const r = await fetch(url, { signal: AbortSignal.timeout(60000) });
+      const r = await fetch(url, { signal: AbortSignal.timeout(30000) });
       if (!r.ok) continue;
       _admin1Data = await r.json();
       return _admin1Data;
@@ -2310,7 +2310,7 @@ async function loadRegionData(level) {
   if (_regionLoading) return;
   _regionLoading = true;
   const loadingEl = document.getElementById('region-loading');
-  if (loadingEl) { loadingEl.classList.remove('hidden'); loadingEl.innerHTML = `<div class="region-loading-spinner">⏳</div><span>${level === 'admin1' ? '전세계 행정구역 로딩 중… (최초 1회 약 40MB)' : '국가 데이터 로딩 중…'}</span>`; }
+  if (loadingEl) { loadingEl.classList.remove('hidden'); loadingEl.innerHTML = `<div class="region-loading-spinner">⏳</div><span>${level === 'admin1' ? '전세계 행정구역 로딩 중…' : '국가 데이터 로딩 중…'}</span>`; }
 
   try {
     const geojson = level === 'admin1' ? await loadAdmin1Data() : await loadCountryData();
