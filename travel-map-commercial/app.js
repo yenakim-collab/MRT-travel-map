@@ -2292,14 +2292,15 @@ async function loadCountryData() {
 async function loadAdmin1Data() {
   if (_admin1Data) return _admin1Data;
   const urls = [
-    'ne_50m_admin1.json',
-    'https://raw.githubusercontent.com/nvkelso/natural-earth-vector/master/geojson/ne_50m_admin_1_states_provinces.geojson',
+    'admin1-50m.topojson',
   ];
   for (const url of urls) {
     try {
       const r = await fetch(url, { signal: AbortSignal.timeout(30000) });
       if (!r.ok) continue;
-      _admin1Data = await r.json();
+      const topo = await r.json();
+      const key = Object.keys(topo.objects)[0];
+      _admin1Data = topojson.feature(topo, topo.objects[key]);
       return _admin1Data;
     } catch { /* try next */ }
   }
