@@ -1233,20 +1233,20 @@ h2 {
   right: 12px;
   z-index: 1000;
   display: flex;
+  flex-direction: column;
   gap: 8px;
 }
 
 #home-btn {
   display: flex;
   align-items: center;
-  gap: 6px;
+  justify-content: center;
   background: #fff;
   border: 2px solid #ddd;
-  border-radius: 12px;
-  padding: 8px 16px 8px 12px;
-  font-size: 13px;
-  font-family: inherit;
-  font-weight: 700;
+  border-radius: 50%;
+  width: 40px;
+  height: 40px;
+  padding: 0;
   color: #555;
   cursor: pointer;
   box-shadow: 0 2px 12px rgba(0, 0, 0, 0.08);
@@ -1259,24 +1259,22 @@ h2 {
   border-color: #bbb;
 }
 
-/* 핀 추가 버튼 - 독립 스타일 (둥근 사각형 + 오렌지 액센트) */
+/* 핀 추가 버튼 - 아이콘 원형 + 오렌지 액센트 */
 #pin-toggle {
   display: flex;
   align-items: center;
-  gap: 6px;
+  justify-content: center;
   background: #fff;
   border: 2px solid #E85D26;
-  border-radius: 12px;
-  padding: 8px 16px 8px 12px;
-  font-size: 13px;
-  font-family: inherit;
-  font-weight: 700;
+  border-radius: 50%;
+  width: 40px;
+  height: 40px;
+  padding: 0;
   color: #E85D26;
   cursor: pointer;
   box-shadow: 0 2px 12px rgba(232, 93, 38, 0.18);
   transition: background 0.15s, color 0.15s, box-shadow 0.15s;
   user-select: none;
-  letter-spacing: -0.01em;
 }
 
 #pin-toggle:hover {
@@ -1295,18 +1293,17 @@ h2 {
   border-color: #C94E1E;
 }
 
-/* 겹침 방지 토글 */
+/* 겹침 방지 토글 - 아이콘 원형 */
 #overlap-toggle {
   display: flex;
   align-items: center;
-  gap: 6px;
+  justify-content: center;
   background: #fff;
   border: 2px solid #ddd;
-  border-radius: 12px;
-  padding: 8px 16px 8px 12px;
-  font-size: 13px;
-  font-family: inherit;
-  font-weight: 700;
+  border-radius: 50%;
+  width: 40px;
+  height: 40px;
+  padding: 0;
   color: #888;
   cursor: pointer;
   box-shadow: 0 2px 12px rgba(0, 0, 0, 0.08);

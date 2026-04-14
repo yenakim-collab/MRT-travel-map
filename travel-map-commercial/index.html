@@ -94,22 +94,21 @@
       <!-- 상단 우측: 핀 추가 버튼만 -->
       <div id="map-controls-top">
         <button id="home-btn" title="전체보기">
-          <svg width="15" height="15" viewBox="0 0 24 24" fill="currentColor">
+          <svg width="16" height="16" viewBox="0 0 24 24" fill="currentColor">
             <path d="M10 20v-6h4v6h5v-8h3L12 3 2 12h3v8z"/>
           </svg>
-          <span>전체보기</span>
         </button>
-        <button id="pin-toggle" title="지도에 핀 찍어 장소 추가">
-          <svg width="15" height="15" viewBox="0 0 24 24" fill="currentColor">
+        <button id="pin-toggle" title="핀 추가">
+          <svg width="16" height="16" viewBox="0 0 24 24" fill="currentColor">
             <path d="M12 2C8.13 2 5 5.13 5 9c0 5.25 7 13 7 13s7-7.75 7-13c0-3.87-3.13-7-7-7zm0 9.5c-1.38 0-2.5-1.12-2.5-2.5s1.12-2.5 2.5-2.5 2.5 1.12 2.5 2.5-1.12 2.5-2.5 2.5z"/>
           </svg>
-          <span>핀 추가</span>
         </button>
-        <button id="overlap-toggle" class="active" title="마커 겹침 방지">
-          <svg width="15" height="15" viewBox="0 0 24 24" fill="currentColor">
-            <path d="M3 11h8V3H3v8zm2-6h4v4H5V5zm8-2v8h8V3h-8zm6 6h-4V5h4v4zM3 21h8v-8H3v8zm2-6h4v4H5v-4zm13-2h-2v3h-3v2h3v3h2v-3h3v-2h-3v-3z"/>
+        <button id="overlap-toggle" class="active" title="겹침 방지">
+          <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+            <rect x="1" y="1" width="9" height="9" rx="2"/>
+            <rect x="14" y="14" width="9" height="9" rx="2"/>
+            <path d="M14 7h-1.5M7 14v-1.5" stroke-dasharray="2 2"/>
           </svg>
-          <span>겹침 방지</span>
         </button>
       </div>
       <!-- 이동수단 필터 팝오버 (JS로 chips 채워짐) -->

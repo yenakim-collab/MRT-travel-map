@@ -95,6 +95,101 @@ let avoidOverlap = true;      // 마커 겹침 방지 ON/OFF
 let appReady = false;         // loadState 완료 전에 saveState가 빈 데이터를 덮어쓰는 것 방지
 let visibleModes = { bus: true, plane: true, ferry: true, train: true }; // 개별 이동수단 표시 여부
 
+// ─── Undo / Redo ─────────────────────────────────────────────
+const undoStack = [];
+const redoStack = [];
+const MAX_UNDO = 50;
+
+function _captureSnapshot() {
+  return JSON.stringify({
+    waypoints, transportModes, showBadge, showPhoto, showCourse, markerScale,
+    isLoop, loopTransportMode, visibleModes, avoidOverlap,
+    paintedRegions: (typeof paintedRegions !== 'undefined') ? paintedRegions : {},
+    showRegions: (typeof showRegions !== 'undefined') ? showRegions : true,
+    regionColor: (typeof regionColor !== 'undefined') ? regionColor : '#2196F3',
+    regionLevel: (typeof regionLevel !== 'undefined') ? regionLevel : 'country',
+    mapStyleSea: (typeof mapStyleSea !== 'undefined') ? mapStyleSea : '#BEE8FF',
+    mapStyleLand: (typeof mapStyleLand !== 'undefined') ? mapStyleLand : '#E8EAED',
+    mapStyleBorder: (typeof mapStyleBorder !== 'undefined') ? mapStyleBorder : 0.6,
+    markerStyle: (typeof markerStyle !== 'undefined') ? markerStyle : 'pill',
+  });
+}
+
+function pushUndo() {
+  if (!appReady) return;
+  undoStack.push(_captureSnapshot());
+  if (undoStack.length > MAX_UNDO) undoStack.shift();
+  redoStack.length = 0; // 새 액션 시 redo 초기화
+}
+
+function _restoreSnapshot(json) {
+  const s = JSON.parse(json);
+  waypoints = s.waypoints || [];
+  transportModes = s.transportModes || [];
+  showBadge = s.showBadge ?? true;
+  showPhoto = s.showPhoto ?? false;
+  showCourse = s.showCourse ?? true;
+  markerScale = s.markerScale ?? 1.0;
+  isLoop = s.isLoop ?? false;
+  loopTransportMode = s.loopTransportMode ?? 'bus';
+  visibleModes = s.visibleModes || { bus: true, plane: true, ferry: true, train: true };
+  avoidOverlap = s.avoidOverlap ?? true;
+  if (typeof paintedRegions !== 'undefined') paintedRegions = s.paintedRegions || {};
+  if (typeof showRegions !== 'undefined') showRegions = s.showRegions ?? true;
+  if (typeof regionColor !== 'undefined') regionColor = s.regionColor || '#2196F3';
+  if (typeof regionLevel !== 'undefined') regionLevel = s.regionLevel || 'country';
+  if (typeof mapStyleSea !== 'undefined') mapStyleSea = s.mapStyleSea || '#BEE8FF';
+  if (typeof mapStyleLand !== 'undefined') mapStyleLand = s.mapStyleLand || '#E8EAED';
+  if (typeof mapStyleBorder !== 'undefined') mapStyleBorder = s.mapStyleBorder ?? 0.6;
+  if (typeof markerStyle !== 'undefined') markerStyle = s.markerStyle || 'pill';
+
+  // UI 동기화
+  document.getElementById('badge-toggle')?.classList.toggle('active', showBadge);
+  document.getElementById('photo-toggle')?.classList.toggle('active', showPhoto);
+  document.getElementById('course-toggle')?.classList.toggle('active', showCourse);
+  document.getElementById('overlap-toggle')?.classList.toggle('active', avoidOverlap);
+  document.getElementById('region-toggle')?.classList.toggle('active', showRegions);
+  const _scBtn = document.getElementById('scale-cycle-btn');
+  if (_scBtn) _scBtn.textContent = markerScale + '×';
+  document.querySelectorAll('.marker-style-btn').forEach(b =>
+    b.classList.toggle('active', b.dataset.style === markerStyle)
+  );
+  document.getElementById('map').style.background = mapStyleSea || '#BEE8FF';
+
+  // 렌더링 (saveState 호출 없이)
+  _skipUndoPush = true;
+  if (typeof updateRegionStyles === 'function') updateRegionStyles();
+  if (typeof renderRegionList === 'function') renderRegionList();
+  if (typeof renderPinList === 'function') renderPinList();
+  if (typeof updateBadgeUI === 'function') updateBadgeUI();
+  render();
+  _skipUndoPush = false;
+}
+
+let _skipUndoPush = false;
+
+document.addEventListener('keydown', (e) => {
+  // Ctrl+Z (Cmd+Z on Mac) = undo, Ctrl+Shift+Z (Cmd+Shift+Z) = redo
+  if (!(e.ctrlKey || e.metaKey) || e.key.toLowerCase() !== 'z') return;
+  // 입력 필드에서는 브라우저 기본 동작 유지
+  const tag = document.activeElement?.tagName;
+  if (tag === 'INPUT' || tag === 'TEXTAREA') return;
+  e.preventDefault();
+
+  if (e.shiftKey) {
+    // Redo
+    if (redoStack.length === 0) return;
+    undoStack.push(_captureSnapshot());
+    _restoreSnapshot(redoStack.pop());
+  } else {
+    // Undo
+    if (undoStack.length === 0) return;
+    redoStack.push(_captureSnapshot());
+    _restoreSnapshot(undoStack.pop());
+  }
+  saveState(); // localStorage 동기화
+});
+
 // ─── LocalStorage 저장/복원 ──────────────────────────────────
 const STORAGE_KEY = 'travel-map-state';
 
@@ -2631,10 +2726,11 @@ document.getElementById('region-toggle')?.addEventListener('click', () => {
   saveState();
 });
 
-// Extend saveState for region data
+// Extend saveState for region data + undo snapshot
 const _origSaveState = saveState;
 saveState = function() {
   if (!appReady) return;
+  if (!_skipUndoPush) pushUndo();
   try {
     localStorage.setItem(STORAGE_KEY, JSON.stringify({
       waypoints, transportModes, showBadge, showPhoto, showCourse, markerScale, isLoop, loopTransportMode, visibleModes,
