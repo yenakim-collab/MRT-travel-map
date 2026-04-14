@@ -91,6 +91,7 @@ let uploadTargetIndex = null; // 사진 업로드 대상 인덱스
 let isEditMode = false;       // 여행지명 편집 모드
 let isPinMode = false;        // 핀 찍기 모드
 let pinMarker = null;         // 핀 모드 임시 마커
+let avoidOverlap = true;      // 마커 겹침 방지 ON/OFF
 let appReady = false;         // loadState 완료 전에 saveState가 빈 데이터를 덮어쓰는 것 방지
 let visibleModes = { bus: true, plane: true, ferry: true, train: true }; // 개별 이동수단 표시 여부
 
@@ -101,11 +102,11 @@ function saveState() {
   if (!appReady) return; // loadState 완료 전에 빈 데이터로 덮어쓰기 방지
   try {
     localStorage.setItem(STORAGE_KEY, JSON.stringify({
-      waypoints, transportModes, showBadge, showPhoto, showCourse, markerScale, isLoop, loopTransportMode, visibleModes,
+      waypoints, transportModes, showBadge, showPhoto, showCourse, markerScale, isLoop, loopTransportMode, visibleModes, avoidOverlap,
     }));
   } catch (e) {
     const slim = waypoints.map(wp => ({ ...wp, imgUrl: wp.imgUrl?.startsWith('data:') ? null : wp.imgUrl }));
-    localStorage.setItem(STORAGE_KEY, JSON.stringify({ waypoints: slim, transportModes, showBadge, showPhoto, showCourse, markerScale, isLoop, loopTransportMode, visibleModes }));
+    localStorage.setItem(STORAGE_KEY, JSON.stringify({ waypoints: slim, transportModes, showBadge, showPhoto, showCourse, markerScale, isLoop, loopTransportMode, visibleModes, avoidOverlap }));
   }
 }
 
@@ -123,9 +124,11 @@ function loadState() {
     isLoop = state.isLoop ?? false;
     loopTransportMode = state.loopTransportMode ?? 'bus';
     if (state.visibleModes) visibleModes = state.visibleModes;
+    avoidOverlap = state.avoidOverlap ?? true;
     document.getElementById('badge-toggle')?.classList.toggle('active', showBadge);
     document.getElementById('photo-toggle')?.classList.toggle('active', showPhoto);
     document.getElementById('course-toggle')?.classList.toggle('active', showCourse);
+    document.getElementById('overlap-toggle')?.classList.toggle('active', avoidOverlap);
     // 저장된 배율 버튼 복원
     const _scBtn = document.getElementById('scale-cycle-btn');
     if (_scBtn) _scBtn.textContent = markerScale + '×';
@@ -382,6 +385,7 @@ function estimatePillW(name) {
 // ─── 마커 겹침 방지 오프셋 계산 ─────────────────────────────
 function computeOffsets(pts, badgePts = []) {
   if (pts.length === 0) return [];
+  if (!avoidOverlap) return pts.map(() => ({ dx: 0, dy: 0 }));
   // 배율 적용된 실제 크기
   const PR  = 32 * markerScale;
   const PH  = 26 * markerScale;
@@ -1395,6 +1399,14 @@ function exitPinMode() {
 
 document.getElementById('pin-toggle').addEventListener('click', () => {
   isPinMode ? exitPinMode() : enterPinMode();
+});
+
+// ─── 겹침 방지 토글 ──────────────────────────────────────────
+document.getElementById('overlap-toggle').addEventListener('click', () => {
+  avoidOverlap = !avoidOverlap;
+  document.getElementById('overlap-toggle').classList.toggle('active', avoidOverlap);
+  render();
+  saveState();
 });
 
 // Esc로 핀 모드 취소

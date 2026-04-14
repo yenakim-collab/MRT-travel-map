@@ -1295,6 +1295,41 @@ h2 {
   border-color: #C94E1E;
 }
 
+/* 겹침 방지 토글 */
+#overlap-toggle {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  background: #fff;
+  border: 2px solid #ddd;
+  border-radius: 12px;
+  padding: 8px 16px 8px 12px;
+  font-size: 13px;
+  font-family: inherit;
+  font-weight: 700;
+  color: #888;
+  cursor: pointer;
+  box-shadow: 0 2px 12px rgba(0, 0, 0, 0.08);
+  transition: background 0.15s, color 0.15s, border-color 0.15s;
+  user-select: none;
+}
+
+#overlap-toggle:hover {
+  background: #f5f5f5;
+  border-color: #bbb;
+}
+
+#overlap-toggle.active {
+  background: #fff;
+  border-color: #5B7FE8;
+  color: #5B7FE8;
+  box-shadow: 0 2px 12px rgba(91, 127, 232, 0.18);
+}
+
+#overlap-toggle.active:hover {
+  background: rgba(91, 127, 232, 0.07);
+}
+
 /* 하단 중앙: 표시 옵션 + 배율 컨트롤 */
 #map-controls-bottom {
   position: absolute;
