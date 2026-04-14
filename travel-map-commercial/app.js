@@ -92,6 +92,7 @@ let isEditMode = false;       // 여행지명 편집 모드
 let isPinMode = false;        // 핀 찍기 모드
 let pinMarker = null;         // 핀 모드 임시 마커
 let avoidOverlap = true;      // 마커 겹침 방지 ON/OFF
+let _topZIndex = 10000;       // 겹침 방지 OFF 시 드래그한 마커 z-index 누적
 let appReady = false;         // loadState 완료 전에 saveState가 빈 데이터를 덮어쓰는 것 방지
 let visibleModes = { bus: true, plane: true, ferry: true, train: true }; // 개별 이동수단 표시 여부
 
@@ -751,7 +752,14 @@ function renderMarkers() {
         waypoints[idx].lat = lat;
         waypoints[idx].lng = lng;
       });
-      renderNoFit();
+      if (!avoidOverlap) {
+        // 겹침 방지 꺼진 상태: 드래그한 마커를 최상위로, 리렌더 안 함
+        _topZIndex += 10;
+        m.setZIndexOffset(_topZIndex);
+        saveState();
+      } else {
+        renderNoFit();
+      }
     });
   });
 }
