@@ -86,6 +86,7 @@ let dragSrcIndex = null;      // 드래그 중인 코스 인덱스
 let showBadge  = true;        // 이동수단 배지 표시 여부
 let showPhoto  = false;       // 여행지 이미지 표시 여부
 let showCourse  = true;       // 코스(경로선+화살표) 표시 여부
+let showNumber  = true;       // 마커 번호 표시 여부
 let markerScale = 1.0;        // 마커 에셋 배율 (1 / 1.5 / 2)
 let uploadTargetIndex = null; // 사진 업로드 대상 인덱스
 let isEditMode = false;       // 여행지명 편집 모드
@@ -105,7 +106,7 @@ const MAX_UNDO = 50;
 function _captureSnapshot() {
   return JSON.stringify({
     waypoints, transportModes, showBadge, showPhoto, showCourse, markerScale,
-    isLoop, loopTransportMode, visibleModes, avoidOverlap,
+    isLoop, loopTransportMode, visibleModes, avoidOverlap, showNumber,
     paintedRegions: (typeof paintedRegions !== 'undefined') ? paintedRegions : {},
     showRegions: (typeof showRegions !== 'undefined') ? showRegions : true,
     regionColor: (typeof regionColor !== 'undefined') ? regionColor : '#2196F3',
@@ -136,6 +137,7 @@ function _restoreSnapshot(json) {
   loopTransportMode = s.loopTransportMode ?? 'bus';
   visibleModes = s.visibleModes || { bus: true, plane: true, ferry: true, train: true };
   avoidOverlap = s.avoidOverlap ?? true;
+  showNumber = s.showNumber ?? true;
   if (typeof paintedRegions !== 'undefined') paintedRegions = s.paintedRegions || {};
   if (typeof showRegions !== 'undefined') showRegions = s.showRegions ?? true;
   if (typeof regionColor !== 'undefined') regionColor = s.regionColor || '#2196F3';
@@ -473,9 +475,9 @@ function estimatePillW(name) {
   // 한글은 ~11px, 라틴 ~7px per char
   const charW = /[\uAC00-\uD7A3]/.test(name) ? 10 : 7;
   const textW = Math.min(name.length, 14) * charW;
-  // showCourse ON: 4(좌패딩) + 20(번호원) + 5(gap) + textW + 10(우패딩)
-  // showCourse OFF: 10(좌패딩) + textW + 10(우패딩)
-  const base = showCourse ? (textW + 39) : (textW + 20);
+  // showNumber ON: 4(좌패딩) + 20(번호원) + 5(gap) + textW + 10(우패딩)
+  // showNumber OFF: 10(좌패딩) + textW + 10(우패딩)
+  const base = showNumber ? (textW + 39) : (textW + 20);
   return base * markerScale;
 }
 
@@ -574,9 +576,9 @@ function makeMarkerIcon(wp, i, offset = { dx: 0, dy: 0 }, numLabel = null) {
     ? `<svg width="24" height="24" viewBox="0 0 24 24" fill="#ccc"><path d="M21 19V5c0-1.1-.9-2-2-2H5c-1.1 0-2 .9-2 2v14c0 1.1.9 2 2 2h14c1.1 0 2-.9 2-2zM8.5 13.5l2.5 3.01L14.5 12l4.5 6H5l3.5-4.5z"/></svg>`
     : '';
   const displayNum = numLabel != null ? numLabel : String(i + 1);
-  const numHtml = showCourse ? `<span class="pm-num">${displayNum}</span>` : '';
+  const numHtml = showNumber ? `<span class="pm-num">${displayNum}</span>` : '';
   const bubbleCls = markerStyle === 'bubble' ? ' pm-pill--bubble' : '';
-  const pill = `<div class="pm-pill${showCourse ? '' : ' pm-pill--nonum'}${bubbleCls}">${numHtml}<span class="pm-name">${wp.name}</span></div>`;
+  const pill = `<div class="pm-pill${showNumber ? '' : ' pm-pill--nonum'}${bubbleCls}">${numHtml}<span class="pm-name">${wp.name}</span></div>`;
 
   let inner = '';
   if (hasOffset) {
@@ -1835,7 +1837,7 @@ document.getElementById('export-btn').addEventListener('click', async () => {
         const numBadgeH = NUM_R * 2;
         ctx.font = `600 ${Math.round(13 * markerScale)}px 'Noto Sans KR', sans-serif`;
         const nameW = ctx.measureText(nameStr).width;
-        const pillW = showCourse ? (4 * markerScale + numBadgeW + 5 * markerScale + nameW + 10 * markerScale)
+        const pillW = showNumber ? (4 * markerScale + numBadgeW + 5 * markerScale + nameW + 10 * markerScale)
                                  : (10 * markerScale + nameW + 10 * markerScale);
         const px = pillCX - pillW / 2;
         const py = pillCY - PILL_H / 2;
@@ -1867,7 +1869,7 @@ document.getElementById('export-btn').addEventListener('click', async () => {
           ctx.stroke();
         }
 
-        if (showCourse) {
+        if (showNumber) {
           const numCX = px + 4 * markerScale + numBadgeW / 2;
           const numCY = pillCY;
           const numBadgeR = numBadgeH / 2;
@@ -2749,14 +2751,14 @@ saveState = function() {
     localStorage.setItem(STORAGE_KEY, JSON.stringify({
       waypoints, transportModes, showBadge, showPhoto, showCourse, markerScale, isLoop, loopTransportMode, visibleModes,
       paintedRegions, showRegions, regionColor, regionLevel,
-      mapStyleSea, mapStyleLand, mapStyleBorder, markerStyle,
+      mapStyleSea, mapStyleLand, mapStyleBorder, markerStyle, showNumber,
     }));
   } catch (e) {
     const slim = waypoints.map(wp => ({ ...wp, imgUrl: wp.imgUrl?.startsWith('data:') ? null : wp.imgUrl }));
     localStorage.setItem(STORAGE_KEY, JSON.stringify({
       waypoints: slim, transportModes, showBadge, showPhoto, showCourse, markerScale, isLoop, loopTransportMode, visibleModes,
       paintedRegions, showRegions, regionColor, regionLevel,
-      mapStyleSea, mapStyleLand, mapStyleBorder, markerStyle,
+      mapStyleSea, mapStyleLand, mapStyleBorder, markerStyle, showNumber,
     }));
   }
 };
@@ -2777,6 +2779,7 @@ loadState = function() {
     if (state.mapStyleLand) mapStyleLand = state.mapStyleLand;
     if (state.mapStyleBorder !== undefined) mapStyleBorder = state.mapStyleBorder;
     if (state.markerStyle) markerStyle = state.markerStyle;
+    if (state.showNumber !== undefined) showNumber = state.showNumber;
     document.querySelectorAll('.marker-style-btn').forEach(b =>
       b.classList.toggle('active', b.dataset.style === markerStyle)
     );
@@ -2828,7 +2831,9 @@ applyMapSeaColor();
   const borderInput = document.getElementById('map-style-border');
   const borderVal = document.getElementById('map-style-border-val');
   const markerToggles = overlay?.querySelectorAll('.map-style-toggle[data-marker]');
+  const numberToggles = overlay?.querySelectorAll('.map-style-toggle[data-number]');
   let pendingMarkerStyle = markerStyle;
+  let pendingShowNumber = showNumber;
   let pendingSea = mapStyleSea;
   let pendingLand = mapStyleLand;
   if (!overlay) return;
@@ -2847,6 +2852,14 @@ applyMapSeaColor();
       markerToggles.forEach(b => b.classList.remove('active'));
       btn.classList.add('active');
       pendingMarkerStyle = btn.dataset.marker;
+    });
+  });
+
+  numberToggles.forEach(btn => {
+    btn.addEventListener('click', () => {
+      numberToggles.forEach(b => b.classList.remove('active'));
+      btn.classList.add('active');
+      pendingShowNumber = btn.dataset.number === 'on';
     });
   });
 
@@ -2873,7 +2886,9 @@ applyMapSeaColor();
     borderInput.value = mapStyleBorder;
     borderVal.textContent = mapStyleBorder;
     pendingMarkerStyle = markerStyle;
+    pendingShowNumber = showNumber;
     markerToggles.forEach(b => b.classList.toggle('active', b.dataset.marker === markerStyle));
+    numberToggles.forEach(b => b.classList.toggle('active', (b.dataset.number === 'on') === showNumber));
     overlay.classList.add('visible');
   });
 
@@ -2891,7 +2906,9 @@ applyMapSeaColor();
     borderInput.value = 0.6;
     borderVal.textContent = '0.6';
     pendingMarkerStyle = 'pill';
+    pendingShowNumber = true;
     markerToggles.forEach(b => b.classList.toggle('active', b.dataset.marker === 'pill'));
+    numberToggles.forEach(b => b.classList.toggle('active', b.dataset.number === 'on'));
   });
 
   document.getElementById('map-style-apply').addEventListener('click', () => {
@@ -2899,6 +2916,7 @@ applyMapSeaColor();
     mapStyleLand = pendingLand;
     mapStyleBorder = parseFloat(borderInput.value);
     markerStyle = pendingMarkerStyle;
+    showNumber = pendingShowNumber;
     document.querySelectorAll('.marker-style-btn').forEach(b =>
       b.classList.toggle('active', b.dataset.style === markerStyle)
     );

@@ -7,7 +7,7 @@
   <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css" />
   <link rel="preconnect" href="https://fonts.googleapis.com" />
   <link href="https://fonts.googleapis.com/css2?family=Noto+Sans+KR:wght@400;500;700&display=swap" rel="stylesheet" />
-  <link rel="stylesheet" href="style.css?v=20260414d" />
+  <link rel="stylesheet" href="style.css?v=20260414e" />
 </head>
 <body>
   <div id="app">
@@ -209,6 +209,13 @@
         </div>
       </div>
       <div class="map-style-row">
+        <label>번호 표시</label>
+        <div class="map-style-toggle-group">
+          <button class="map-style-toggle active" data-number="on">ON</button>
+          <button class="map-style-toggle" data-number="off">OFF</button>
+        </div>
+      </div>
+      <div class="map-style-row">
         <label>바다 색상</label>
         <div class="map-style-swatch" id="map-style-sea" data-color="#BEE8FF"></div>
       </div>
@@ -232,6 +239,6 @@
 
   <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
   <script src="https://cdn.jsdelivr.net/npm/topojson-client@3/dist/topojson-client.min.js"></script>
-  <script src="app.js?v=20260414d"></script>
+  <script src="app.js?v=20260414e"></script>
 </body>
 </html>
