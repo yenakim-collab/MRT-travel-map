@@ -92,7 +92,8 @@ let isEditMode = false;       // 여행지명 편집 모드
 let isPinMode = false;        // 핀 찍기 모드
 let pinMarker = null;         // 핀 모드 임시 마커
 let avoidOverlap = true;      // 마커 겹침 방지 ON/OFF
-let _topZIndex = 10000;       // 겹침 방지 OFF 시 드래그한 마커 z-index 누적
+let markerZOrder = {};        // 겹침 방지 OFF 시 마커별 z순서 { wpIndex: zValue }
+let _markerZCounter = 10000;  // z-index 카운터
 let appReady = false;         // loadState 완료 전에 saveState가 빈 데이터를 덮어쓰는 것 방지
 let visibleModes = { bus: true, plane: true, ferry: true, train: true }; // 개별 이동수단 표시 여부
 
@@ -739,7 +740,9 @@ function renderMarkers() {
     const numLabel = g.indices.map(idx => idx + 1).join(' · ');
     const m = L.marker([g.lat, g.lng], {
       icon: makeMarkerIcon(g.wp, g.indices[0], offsets[gi], numLabel),
-      zIndexOffset: 500 + g.indices[0] * 10,
+      zIndexOffset: !avoidOverlap && markerZOrder[g.indices[0]] != null
+        ? markerZOrder[g.indices[0]]
+        : 500 + g.indices[0] * 10,
       draggable: !isPinMode,
     }).addTo(markerLayer);
 
@@ -753,9 +756,11 @@ function renderMarkers() {
         waypoints[idx].lng = lng;
       });
       if (!avoidOverlap) {
-        // 겹침 방지 꺼진 상태: 드래그한 마커를 최상위로, 리렌더 안 함
-        _topZIndex += 10;
-        m.setZIndexOffset(_topZIndex);
+        // 겹침 방지 꺼진 상태: 드래그한 마커를 최상위로
+        _markerZCounter = (_markerZCounter || 10000) + 10;
+        const z = _markerZCounter;
+        markerZOrder[g.indices[0]] = z;
+        m.setZIndexOffset(z);
         saveState();
       } else {
         renderNoFit();
@@ -1507,6 +1512,7 @@ document.getElementById('pin-toggle').addEventListener('click', () => {
 // ─── 겹침 방지 토글 ──────────────────────────────────────────
 document.getElementById('overlap-toggle').addEventListener('click', () => {
   avoidOverlap = !avoidOverlap;
+  if (avoidOverlap) { markerZOrder = {}; _markerZCounter = 10000; }
   document.getElementById('overlap-toggle').classList.toggle('active', avoidOverlap);
   render();
   saveState();
