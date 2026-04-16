@@ -1402,18 +1402,6 @@ scaleCycleBtn.addEventListener('click', () => {
   saveState();
 });
 
-// ─── Marker style toggle (bottom bar) ────────────────────────
-document.querySelectorAll('.marker-style-btn').forEach(btn => {
-  btn.addEventListener('click', () => {
-    markerStyle = btn.dataset.style;
-    document.querySelectorAll('.marker-style-btn').forEach(b =>
-      b.classList.toggle('active', b === btn)
-    );
-    renderMarkers();
-    saveState();
-  });
-});
-
 // ─── Course toggle ───────────────────────────────────────────
 document.getElementById('course-toggle').addEventListener('click', () => {
   showCourse = !showCourse;
@@ -2879,7 +2867,7 @@ applyMapSeaColor();
     });
   });
 
-  document.getElementById('map-style-btn').addEventListener('click', () => {
+  function openStyleModal() {
     pendingSea = mapStyleSea;
     pendingLand = mapStyleLand;
     updateSwatches();
@@ -2890,7 +2878,10 @@ applyMapSeaColor();
     markerToggles.forEach(b => b.classList.toggle('active', b.dataset.marker === markerStyle));
     numberToggles.forEach(b => b.classList.toggle('active', (b.dataset.number === 'on') === showNumber));
     overlay.classList.add('visible');
-  });
+  }
+  document.getElementById('map-style-btn').addEventListener('click', openStyleModal);
+  const bottomBtn = document.getElementById('map-style-bottom-btn');
+  if (bottomBtn) bottomBtn.addEventListener('click', openStyleModal);
 
   document.getElementById('map-style-close').addEventListener('click', () => {
     overlay.classList.remove('visible');
@@ -2917,9 +2908,6 @@ applyMapSeaColor();
     mapStyleBorder = parseFloat(borderInput.value);
     markerStyle = pendingMarkerStyle;
     showNumber = pendingShowNumber;
-    document.querySelectorAll('.marker-style-btn').forEach(b =>
-      b.classList.toggle('active', b.dataset.style === markerStyle)
-    );
     applyMapSeaColor();
     updateRegionStyles();
     renderMarkers();

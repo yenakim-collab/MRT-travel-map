@@ -1596,30 +1596,22 @@ h2 {
   background: #444;
 }
 
-/* ─── Marker style control ───────────────────────────── */
-#marker-style-control {
-  display: flex;
-  align-items: center;
-  gap: 2px;
-}
-.marker-style-btn {
-  background: none;
-  border: 2px solid transparent;
-  border-radius: 6px;
+/* ─── Settings button (bottom bar) ───────────────────── */
+#map-style-bottom-btn {
+  background: rgba(255,255,255,0.85);
+  border: none;
+  border-radius: 8px;
   cursor: pointer;
-  padding: 2px;
+  padding: 6px 8px;
   display: flex;
   align-items: center;
   justify-content: center;
-  opacity: 0.4;
-  transition: opacity 0.15s, border-color 0.15s;
+  color: #555;
+  transition: background 0.15s, color 0.15s;
 }
-.marker-style-btn:hover {
-  opacity: 0.7;
-}
-.marker-style-btn.active {
-  opacity: 1;
-  border-color: #222;
+#map-style-bottom-btn:hover {
+  background: #fff;
+  color: #222;
 }
 
 
